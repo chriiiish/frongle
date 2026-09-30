@@ -1,0 +1,9 @@
+/* Mobile-first: base styles target a phone. Use min-width media queries to scale up. */
+body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+}
+
+main {
+  padding: 1rem;
+}

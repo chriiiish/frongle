@@ -1,0 +1,45 @@
+# Local kind cluster. The demo users and password below are for local work only.
+publicUrl: http://localhost
+
+api:
+  image:
+    repository: frongle/api
+    tag: local
+  replicas: 1
+
+web:
+  image:
+    repository: frongle/web
+    tag: local
+  replicas: 1
+
+database:
+  ssl: false
+
+postgres:
+  enabled: true
+  password: local-only-password
+
+keycloak:
+  instances: 1
+  resources:
+    requests:
+      memory: 600Mi
+    limits:
+      memory: 1200Mi
+  users:
+    - username: manager@acme.test
+      password: password
+      email: manager@acme.test
+      tenantId: acme
+      roles: [maintenance-manager]
+    - username: team@acme.test
+      password: password
+      email: team@acme.test
+      tenantId: acme
+      roles: [work-team]
+    - username: manager@globex.test
+      password: password
+      email: manager@globex.test
+      tenantId: globex
+      roles: [maintenance-manager]

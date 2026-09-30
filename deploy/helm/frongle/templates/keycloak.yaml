@@ -1,0 +1,39 @@
+apiVersion: k8s.keycloak.org/v2alpha1
+kind: Keycloak
+metadata:
+  name: {{ include "frongle.keycloakName" . }}
+spec:
+  instances: {{ .Values.keycloak.instances }}
+  db:
+    vendor: postgres
+    host: {{ include "frongle.dbHost" . }}
+    port: {{ .Values.database.port }}
+    database: keycloak
+    usernameSecret:
+      name: {{ include "frongle.dbSecret" . }}
+      key: username
+    passwordSecret:
+      name: {{ include "frongle.dbSecret" . }}
+      key: password
+  {{- with .Values.keycloak.resources }}
+  resources:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  http:
+    httpEnabled: true
+  hostname:
+    hostname: {{ .Values.publicUrl }}/auth
+  proxy:
+    headers: xforwarded
+  ingress:
+    enabled: false
+  additionalOptions:
+    - name: http-relative-path
+      value: /auth
+    # Keep the public issuer, but give server-to-server callers (the API) internal endpoint URLs.
+    - name: hostname-backchannel-dynamic
+      value: "true"
+    {{- if .Values.database.ssl }}
+    - name: db-url-properties
+      value: "?sslmode=require"
+    {{- end }}

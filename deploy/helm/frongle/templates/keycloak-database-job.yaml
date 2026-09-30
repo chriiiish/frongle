@@ -1,0 +1,43 @@
+{{- if not .Values.postgres.enabled }}
+# Creates the "keycloak" database on an external Postgres (for example RDS). Safe to run again.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-keycloak-database
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: psql
+          image: postgres:17-alpine
+          env:
+            - name: PGHOST
+              value: {{ include "frongle.dbHost" . | quote }}
+            - name: PGPORT
+              value: {{ .Values.database.port | quote }}
+            - name: PGDATABASE
+              value: {{ .Values.database.name | quote }}
+            - name: PGSSLMODE
+              value: {{ ternary "require" "disable" .Values.database.ssl }}
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "frongle.dbSecret" . }}
+                  key: username
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "frongle.dbSecret" . }}
+                  key: password
+          command:
+            - sh
+            - -c
+            - |
+              psql -tc "SELECT 1 FROM pg_database WHERE datname = 'keycloak'" | grep -q 1 \
+                || psql -c "CREATE DATABASE keycloak"
+{{- end }}

@@ -1,0 +1,7 @@
+# Accepted risks. Review these when the network design changes.
+
+# The EKS API endpoint is public but limited to var.admin_cidrs. A private endpoint needs a VPN or bastion host.
+AWS-0040
+
+# Worker nodes need outbound access to pull images and reach AWS APIs through the NAT gateway.
+AWS-0104

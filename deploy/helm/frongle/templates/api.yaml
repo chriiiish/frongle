@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-api
+spec:
+  replicas: {{ .Values.api.replicas }}
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}-api
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}-api
+    spec:
+      containers:
+        - name: api
+          image: "{{ .Values.api.image.repository }}:{{ .Values.api.image.tag }}"
+          ports:
+            - containerPort: {{ .Values.api.port }}
+          env:
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "frongle.dbSecret" . }}
+                  key: username
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "frongle.dbSecret" . }}
+                  key: password
+            - name: ConnectionStrings__Frongle
+              value: "Host={{ include "frongle.dbHost" . }};Port={{ .Values.database.port }};Database={{ .Values.database.name }};Username=$(DB_USER);Password=$(DB_PASSWORD);SSL Mode={{ ternary "Require" "Disable" .Values.database.ssl }}"
+            - name: Database__MigrateOnStartup
+              value: {{ .Values.api.migrateOnStartup | quote }}
+            - name: Authentication__Authority
+              value: "{{ .Values.publicUrl }}/auth/realms/{{ .Values.keycloak.realm }}"
+            - name: Authentication__MetadataAddress
+              value: "http://{{ include "frongle.keycloakName" . }}-service:8080/auth/realms/{{ .Values.keycloak.realm }}/.well-known/openid-configuration"
+            - name: Authentication__RequireHttpsMetadata
+              value: {{ hasPrefix "https" .Values.publicUrl | quote }}
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: {{ .Values.api.port }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.api.port }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-api
+spec:
+  selector:
+    app: {{ .Release.Name }}-api
+  ports:
+    - port: 80
+      targetPort: {{ .Values.api.port }}

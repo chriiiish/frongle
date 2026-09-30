@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-web
+spec:
+  replicas: {{ .Values.web.replicas }}
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}-web
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}-web
+    spec:
+      containers:
+        - name: web
+          image: "{{ .Values.web.image.repository }}:{{ .Values.web.image.tag }}"
+          ports:
+            - containerPort: {{ .Values.web.port }}
+          volumeMounts:
+            - name: config
+              mountPath: /usr/share/nginx/html/config.json
+              subPath: config.json
+          readinessProbe:
+            httpGet:
+              path: /
+              port: {{ .Values.web.port }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ .Release.Name }}-web-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-web
+spec:
+  selector:
+    app: {{ .Release.Name }}-web
+  ports:
+    - port: 80
+      targetPort: {{ .Values.web.port }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-web-config
+data:
+  config.json: |
+    {
+      "keycloakUrl": "{{ .Values.publicUrl }}/auth",
+      "realm": "{{ .Values.keycloak.realm }}",
+      "clientId": "{{ .Values.keycloak.clientId }}"
+    }
