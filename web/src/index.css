@@ -1,9 +1,61 @@
 /* Mobile-first: base styles target a phone. Use min-width media queries to scale up. */
+:root {
+  --brand-red: #ea4e2d;
+  --brand-cream: #efe4b4;
+  --brand-ink: #191919;
+}
+
 body {
   margin: 0;
-  font-family: system-ui, sans-serif;
+  background: var(--brand-cream);
+  color: var(--brand-ink);
+  font-family: Cabin, system-ui, sans-serif;
+}
+
+h1 {
+  margin: 0;
+  font-family: Domine, serif;
+  font-weight: 400;
 }
 
 main {
   padding: 1rem;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 2px solid var(--brand-red);
+}
+
+header img {
+  width: 2.5rem;
+  height: 2.5rem;
+}
+
+button {
+  padding: 0.75rem 1.25rem;
+  border: 0;
+  border-radius: 0.25rem;
+  background: var(--brand-red);
+  color: var(--brand-ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button:focus-visible {
+  outline: 2px solid var(--brand-ink);
+  outline-offset: 2px;
+}
+
+@media (min-width: 40rem) {
+  main {
+    max-width: 40rem;
+    margin: 0 auto;
+    padding: 2rem;
+  }
 }

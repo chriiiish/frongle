@@ -23,6 +23,12 @@ it('shows the app name', () => {
   expect(screen.getByRole('heading', { name: 'Frongle' })).toBeInTheDocument()
 })
 
+it('shows the Frongle logo beside the app name', () => {
+  renderApp(signedOut)
+
+  expect(screen.getByRole('img', { name: 'Frongle logo' })).toHaveAttribute('src', '/logo.svg')
+})
+
 it('asks a signed-out user to sign in', async () => {
   renderApp(signedOut)
 

@@ -6,7 +6,10 @@ export default function App() {
 
   return (
     <main>
-      <h1>Frongle</h1>
+      <header>
+        <img src="/logo.svg" alt="Frongle logo" />
+        <h1>Frongle</h1>
+      </header>
       {authenticated ? (
         <>
           <Hello token={token} />
