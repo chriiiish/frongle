@@ -10,6 +10,7 @@ import {
   useMapEvents,
 } from 'react-leaflet'
 import { type Area, type Asset, type AssetStatus, type Bounds } from './api'
+import { AssetPanel } from './AssetPanel'
 import { NewAssetDialog, type Place } from './NewAssetDialog'
 import { useApi } from './useApi'
 
@@ -73,6 +74,8 @@ export function MapPage() {
   const [problem, setProblem] = useState<string>()
   const [adding, setAdding] = useState<Place>()
   const [added, setAdded] = useState<string>()
+  const [selectedId, setSelectedId] = useState<string>()
+  const selected = assets.find((asset) => asset.id === selectedId)
   const zoomedIn = view !== undefined && view.zoom >= MIN_ASSET_ZOOM
 
   useEffect(() => {
@@ -116,6 +119,7 @@ export function MapPage() {
               center={[asset.latitude, asset.longitude]}
               radius={9}
               bubblingMouseEvents={false}
+              eventHandlers={{ click: () => setSelectedId(asset.id) }}
               pathOptions={{ color: STATUS_COLOUR[asset.status], fillOpacity: 0.9 }}
             >
               <Tooltip>{asset.friendlyId}</Tooltip>
@@ -139,6 +143,15 @@ export function MapPage() {
           </p>
         )}
       </div>
+      {selected && (
+        <AssetPanel
+          asset={selected}
+          onChanged={(changed) =>
+            setAssets((current) => current.map((a) => (a.id === changed.id ? changed : a)))
+          }
+          onClose={() => setSelectedId(undefined)}
+        />
+      )}
       {adding && (
         <NewAssetDialog
           location={adding}

@@ -1,0 +1,100 @@
+import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { EventForm } from './EventForm'
+
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date(2026, 9, 2, 14, 30))
+})
+afterEach(() => vi.useRealTimers())
+
+function renderForm(props: Partial<Parameters<typeof EventForm>[0]> = {}) {
+  const onSubmit = vi.fn()
+  const onCancel = vi.fn()
+  render(
+    <EventForm
+      submitLabel="Add Event"
+      saving={false}
+      onSubmit={onSubmit}
+      onCancel={onCancel}
+      {...props}
+    />,
+  )
+  return { onSubmit, onCancel }
+}
+
+it('starts with a Checked event that happened just now', () => {
+  renderForm()
+
+  expect(screen.getByLabelText('Type')).toHaveValue('Checked')
+  expect(screen.getByLabelText('When')).toHaveValue('2026-10-02T14:30')
+  expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual([
+    'Installed',
+    'Checked',
+    'Repaired',
+    'Maintained',
+    'Removed',
+  ])
+})
+
+it('does not let the user save an event without a title', async () => {
+  renderForm()
+  const save = screen.getByRole('button', { name: 'Add Event' })
+  expect(save).toBeDisabled()
+
+  await userEvent.type(screen.getByLabelText('Title'), 'Checked pole')
+
+  expect(save).toBeEnabled()
+})
+
+it('hands back what the user typed, with the time as a UTC instant', async () => {
+  const { onSubmit } = renderForm()
+
+  await userEvent.selectOptions(screen.getByLabelText('Type'), 'Repaired')
+  await userEvent.type(screen.getByLabelText('Title'), 'Replaced lamp')
+  await userEvent.type(screen.getByLabelText('Notes'), '70 W LED')
+  await userEvent.click(screen.getByRole('button', { name: 'Add Event' }))
+
+  expect(onSubmit).toHaveBeenCalledWith({
+    type: 'Repaired',
+    title: 'Replaced lamp',
+    notes: '70 W LED',
+    occurredAt: new Date(2026, 9, 2, 14, 30).toISOString(),
+  })
+})
+
+it('sends no notes when the user wrote none', async () => {
+  const { onSubmit } = renderForm()
+
+  await userEvent.type(screen.getByLabelText('Title'), 'Checked pole')
+  await userEvent.click(screen.getByRole('button', { name: 'Add Event' }))
+
+  expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ notes: null }))
+})
+
+it('shows the event that the user corrects, in local time', () => {
+  renderForm({
+    initial: {
+      type: 'Maintained',
+      title: 'Tightened bolts',
+      notes: 'Two were loose',
+      occurredAt: new Date(2026, 8, 30, 9, 5).toISOString(),
+    },
+    submitLabel: 'Save Event',
+  })
+
+  expect(screen.getByLabelText('Type')).toHaveValue('Maintained')
+  expect(screen.getByLabelText('Title')).toHaveValue('Tightened bolts')
+  expect(screen.getByLabelText('Notes')).toHaveValue('Two were loose')
+  expect(screen.getByLabelText('When')).toHaveValue('2026-09-30T09:05')
+  expect(screen.getByRole('button', { name: 'Save Event' })).toBeEnabled()
+})
+
+it('shows the reason when the save failed and cancels on request', async () => {
+  const { onCancel } = renderForm({ problem: 'An Event cannot be in the future.' })
+
+  expect(screen.getByRole('alert')).toHaveTextContent('An Event cannot be in the future.')
+  await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+  expect(onCancel).toHaveBeenCalled()
+})

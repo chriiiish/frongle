@@ -48,13 +48,20 @@ vi.mock('react-leaflet', () => ({
   CircleMarker: ({
     center,
     pathOptions,
+    eventHandlers,
     children,
   }: {
     center: [number, number]
     pathOptions: { color: string }
+    eventHandlers?: { click: () => void }
     children: ReactNode
   }) => (
-    <div data-testid="asset" data-center={center.join(',')} data-color={pathOptions.color}>
+    <div
+      data-testid="asset"
+      data-center={center.join(',')}
+      data-color={pathOptions.color}
+      onClick={eventHandlers?.click}
+    >
       {children}
     </div>
   ),
@@ -288,4 +295,25 @@ it('closes the dialog without adding anything when the user cancels', async () =
   await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
 
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+})
+
+it('opens the history of an asset when the user clicks it', async () => {
+  const fetchMock = stubApi({ '/api/assets/asset-1/events': [] })
+  await renderMapPage()
+
+  await userEvent.click(await screen.findByTestId('asset'))
+
+  expect(await screen.findByRole('heading', { name: 'MN-LP-00001' })).toBeInTheDocument()
+  expect(fetchMock).toHaveBeenCalledWith('/api/assets/asset-1/events', expect.anything())
+})
+
+it('closes the history of an asset on request', async () => {
+  stubApi({ '/api/assets/asset-1/events': [] })
+  await renderMapPage()
+  await userEvent.click(await screen.findByTestId('asset'))
+  await screen.findByRole('heading', { name: 'MN-LP-00001' })
+
+  await userEvent.click(screen.getByRole('button', { name: 'Close' }))
+
+  expect(screen.queryByRole('heading', { name: 'MN-LP-00001' })).not.toBeInTheDocument()
 })

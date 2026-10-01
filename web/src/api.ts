@@ -23,6 +23,29 @@ export interface Asset {
   status: AssetStatus
 }
 
+export type EventType = 'Installed' | 'Checked' | 'Repaired' | 'Maintained' | 'Removed'
+
+/** One thing that happened to an Asset. */
+export interface AssetEvent {
+  id: string
+  assetId: string
+  type: EventType
+  title: string
+  notes: string | null
+  /** When it happened, as a UTC instant. */
+  occurredAt: string
+  /** The version to send back when the user corrects the event. */
+  version: number
+}
+
+/** What the user writes about an event. */
+export interface EventDraft {
+  type: EventType
+  title: string
+  notes: string | null
+  occurredAt: string
+}
+
 /** A box on the map, in degrees. */
 export interface Bounds {
   west: number
@@ -42,17 +65,21 @@ async function reasonFor(response: Response): Promise<string> {
   return body.title ?? (messages.join(' ') || `The API returned status ${response.status}.`)
 }
 
-async function call<T>(token: string | undefined, path: string, body?: object): Promise<T> {
+async function call<T>(
+  token: string | undefined,
+  path: string,
+  send?: { method: 'POST' | 'PUT'; body: object },
+): Promise<T> {
   let response: Response
   try {
     response = await fetch(
       path,
-      body === undefined
+      send === undefined
         ? { headers: { Authorization: `Bearer ${token}` } }
         : {
-            method: 'POST',
+            method: send.method,
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
+            body: JSON.stringify(send.body),
           },
     )
   } catch (failure) {
@@ -68,7 +95,16 @@ export function createApi(token: string | undefined) {
     listAreas: () => call<Area[]>(token, '/api/areas'),
     listAssets: ({ west, south, east, north }: Bounds) =>
       call<Asset[]>(token, `/api/assets?west=${west}&south=${south}&east=${east}&north=${north}`),
+    getAsset: (id: string) => call<Asset>(token, `/api/assets/${id}`),
+    listEvents: (assetId: string) => call<AssetEvent[]>(token, `/api/assets/${assetId}/events`),
+    addEvent: (assetId: string, draft: EventDraft) =>
+      call<AssetEvent>(token, `/api/assets/${assetId}/events`, { method: 'POST', body: draft }),
+    changeEvent: (assetId: string, event: AssetEvent, draft: EventDraft) =>
+      call<AssetEvent>(token, `/api/assets/${assetId}/events/${event.id}`, {
+        method: 'PUT',
+        body: { ...draft, version: event.version },
+      }),
     createAsset: (type: AssetType, latitude: number, longitude: number) =>
-      call<Asset>(token, '/api/assets', { type, latitude, longitude }),
+      call<Asset>(token, '/api/assets', { method: 'POST', body: { type, latitude, longitude } }),
   }
 }
