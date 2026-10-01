@@ -56,3 +56,12 @@ run "every_resource_has_an_area_tag_for_cost_allocation" {
     error_message = "Database support resources need area=database."
   }
 }
+
+run "the_cluster_runs_a_version_in_standard_support" {
+  command = plan
+
+  assert {
+    condition     = tonumber(split(".", module.eks.cluster_version)[1]) >= 34
+    error_message = "EKS 1.33 and older are in extended support, which costs more. Use 1.34 or newer."
+  }
+}
