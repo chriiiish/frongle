@@ -108,7 +108,7 @@ it('keeps the account dropdown closed until the user opens it', async () => {
   expect(dropdown).toHaveClass('show')
 })
 
-it('lists the tenant, a separator, Profile, Tenant Settings, a separator, and Logout in that order', async () => {
+it('lists the tenant, a separator, Profile, a separator, and Logout in that order', async () => {
   renderMenu()
   await userEvent.click(accountToggle())
 
@@ -118,16 +118,11 @@ it('lists the tenant, a separator, Profile, Tenant Settings, a separator, and Lo
     'acme',
     'separator',
     'Profile',
-    'Tenant Settings',
     'separator',
     'Logout',
   ])
   expect(screen.getAllByRole('separator')).toHaveLength(2)
   expect(screen.getByRole('link', { name: 'Profile' })).toHaveAttribute('href', '/profile')
-  expect(screen.getByRole('link', { name: 'Tenant Settings' })).toHaveAttribute(
-    'href',
-    '/tenant-settings',
-  )
 })
 
 it('shows the tenant as plain text that the user cannot click', async () => {
