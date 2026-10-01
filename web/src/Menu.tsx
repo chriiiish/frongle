@@ -11,7 +11,7 @@ export function Menu({ onLogout }: { onLogout: () => void }) {
       className="navbar navbar-expand-md border-bottom border-2 border-primary"
       aria-label="Main"
     >
-      <div className="container">
+      <div className="container-fluid">
         <Link className="navbar-brand d-flex align-items-center gap-2" to="/" onClick={close}>
           <img src="/logo.svg" alt="Frongle logo" width="40" height="40" />
           <h1 className="h3 m-0">Frongle</h1>
@@ -27,7 +27,7 @@ export function Menu({ onLogout }: { onLogout: () => void }) {
           <span className="navbar-toggler-icon" />
         </button>
         <div id="main-menu" className={`navbar-collapse collapse${open ? ' show' : ''}`}>
-          <ul className="navbar-nav ms-auto">
+          <ul className="navbar-nav ms-auto align-items-md-center gap-md-2">
             <li className="nav-item">
               <NavLink className="nav-link" to="/" end onClick={close}>
                 Home
@@ -39,7 +39,11 @@ export function Menu({ onLogout }: { onLogout: () => void }) {
               </NavLink>
             </li>
             <li className="nav-item">
-              <button className="nav-link" type="button" onClick={onLogout}>
+              <button
+                className="btn btn-outline-primary my-2 my-md-0"
+                type="button"
+                onClick={onLogout}
+              >
                 Logout
               </button>
             </li>
