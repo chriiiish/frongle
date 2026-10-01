@@ -77,3 +77,26 @@ it('closes the menu on a phone after the user picks a link', async () => {
 
   expect(toggle).toHaveAttribute('aria-expanded', 'false')
 })
+
+it('spans the full width of the screen like the map page', () => {
+  renderMenu()
+
+  expect(screen.getByRole('navigation', { name: 'Main' }).firstElementChild).toHaveClass(
+    'container-fluid',
+  )
+})
+
+it('shows Logout as a button that stands apart from the page links', () => {
+  renderMenu()
+
+  expect(screen.getByRole('button', { name: 'Logout' })).toHaveClass('btn', 'btn-outline-primary')
+})
+
+it('spaces the menu items apart and centers them on desktop', () => {
+  renderMenu()
+
+  expect(screen.getByRole('link', { name: 'Home' }).closest('ul')).toHaveClass(
+    'align-items-md-center',
+    'gap-md-2',
+  )
+})

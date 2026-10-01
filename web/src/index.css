@@ -35,6 +35,20 @@ h6 {
   --bs-btn-font-weight: 600;
 }
 
+/* Ink text on a red outline keeps the button readable on the cream background. */
+.btn-outline-primary {
+  --bs-btn-color: #191919;
+  --bs-btn-border-color: #ea4e2d;
+  --bs-btn-hover-color: #191919;
+  --bs-btn-hover-bg: #ea4e2d;
+  --bs-btn-hover-border-color: #ea4e2d;
+  --bs-btn-active-color: #191919;
+  --bs-btn-active-bg: #d6401f;
+  --bs-btn-active-border-color: #d6401f;
+  --bs-btn-focus-shadow-rgb: 234, 78, 45;
+  --bs-btn-font-weight: 600;
+}
+
 /* Leaflet draws nothing until its container has a height. On a phone the map fills the screen below the menu. */
 .map {
   height: calc(100dvh - 4.5rem);
@@ -45,9 +59,5 @@ h6 {
   .map {
     height: calc(100dvh - 6rem);
     border-radius: 0.5rem;
-  }
-
-  .container {
-    max-width: 40rem;
   }
 }
