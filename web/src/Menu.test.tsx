@@ -91,3 +91,12 @@ it('shows Logout as a button that stands apart from the page links', () => {
 
   expect(screen.getByRole('button', { name: 'Logout' })).toHaveClass('btn', 'btn-outline-primary')
 })
+
+it('spaces the menu items apart and centers them on desktop', () => {
+  renderMenu()
+
+  expect(screen.getByRole('link', { name: 'Home' }).closest('ul')).toHaveClass(
+    'align-items-md-center',
+    'gap-md-2',
+  )
+})
