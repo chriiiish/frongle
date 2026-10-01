@@ -48,19 +48,17 @@ export function Menu({ me, onLogout }: { me: Me | undefined; onLogout: () => voi
                 aria-expanded={accountOpen}
                 onClick={() => setAccountOpen(!accountOpen)}
               >
-                {me ? (
-                  <>
-                    {me.name}
-                    <small className="d-block">{me.tenant}</small>
-                  </>
-                ) : (
-                  'Account'
-                )}
+                {me?.name ?? 'Account'}
               </button>
               <ul
                 className={`dropdown-menu dropdown-menu-md-end${accountOpen ? ' show' : ''}`}
                 aria-label="Account"
               >
+                {me && (
+                  <li>
+                    <span className="dropdown-item-text fw-semibold">{me.tenant}</span>
+                  </li>
+                )}
                 <li>
                   <Link className="dropdown-item" to="/profile" onClick={closeAccount}>
                     Profile

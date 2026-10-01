@@ -83,11 +83,10 @@ it('spans the full width of the screen like the map page', () => {
 
 const accountToggle = () => screen.getByRole('button', { name: /Morgan Manager/ })
 
-it('shows the user name and tenant in the menu bar', () => {
+it('shows only the user name beside the dropdown arrow in the menu bar', () => {
   renderMenu()
 
-  expect(accountToggle()).toHaveTextContent('Morgan Manager')
-  expect(accountToggle()).toHaveTextContent('acme')
+  expect(accountToggle()).toHaveTextContent(/^Morgan Manager$/)
 })
 
 it('shows a plain Account label until the API has said who the user is', () => {
@@ -109,13 +108,14 @@ it('keeps the account dropdown closed until the user opens it', async () => {
   expect(dropdown).toHaveClass('show')
 })
 
-it('lists Profile, Tenant Settings, a separator, and Logout in that order', async () => {
+it('lists the tenant, Profile, Tenant Settings, a separator, and Logout in that order', async () => {
   renderMenu()
   await userEvent.click(accountToggle())
 
   const items = within(screen.getByRole('list', { name: 'Account' })).getAllByRole('listitem')
 
   expect(items.map((item) => item.textContent || 'separator')).toEqual([
+    'acme',
     'Profile',
     'Tenant Settings',
     'separator',
@@ -127,6 +127,24 @@ it('lists Profile, Tenant Settings, a separator, and Logout in that order', asyn
     'href',
     '/tenant-settings',
   )
+})
+
+it('shows the tenant as plain text that the user cannot click', async () => {
+  renderMenu()
+  await userEvent.click(accountToggle())
+
+  expect(screen.getByText('acme')).toHaveClass('dropdown-item-text')
+  expect(screen.queryByRole('link', { name: 'acme' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'acme' })).not.toBeInTheDocument()
+})
+
+it('has no tenant line until the API has said who the user is', async () => {
+  renderMenu('/', vi.fn(), null)
+  await userEvent.click(screen.getByRole('button', { name: 'Account' }))
+
+  const items = within(screen.getByRole('list', { name: 'Account' })).getAllByRole('listitem')
+
+  expect(items[0]).toHaveTextContent('Profile')
 })
 
 it('signs the user out from the account dropdown', async () => {

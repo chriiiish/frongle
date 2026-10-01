@@ -83,7 +83,7 @@ it('gives the welcome page the full screen width and a large heading on desktop'
   expect(heading).toHaveClass('display-5')
 })
 
-it('shows the user name and tenant in the menu bar', async () => {
+it('shows the user name in the menu bar', async () => {
   vi.stubGlobal(
     'fetch',
     vi.fn().mockResolvedValue({
@@ -94,7 +94,7 @@ it('shows the user name and tenant in the menu bar', async () => {
 
   renderApp(signedIn, '/map')
 
-  expect(await screen.findByRole('button', { name: /Morgan Manager/ })).toHaveTextContent('acme')
+  expect(await screen.findByRole('button', { name: 'Morgan Manager' })).toBeInTheDocument()
 })
 
 it('does not show the map on the welcome page', () => {
