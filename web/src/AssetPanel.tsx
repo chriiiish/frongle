@@ -5,6 +5,7 @@ import {
   type AssetStatus,
   type AssetType,
   type EventDraft,
+  type EventImage,
 } from './api'
 import { EventForm } from './EventForm'
 import { useApi } from './useApi'
@@ -20,6 +21,8 @@ const STATUS_LABEL: Record<AssetStatus, string> = {
   InService: 'In service',
   Removed: 'Removed',
 }
+
+const MAX_PHOTOS = 5
 
 function newestFirst(events: AssetEvent[]) {
   return [...events].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt))
@@ -56,22 +59,46 @@ export function AssetPanel({
     void load()
   }, [load])
 
-  async function save(draft: EventDraft) {
+  async function save(draft: EventDraft, photos: File[]) {
     setSaving(true)
     setProblem(undefined)
     try {
-      if (mode.kind === 'editing') await api.changeEvent(asset.id, mode.event, draft)
-      else await api.addEvent(asset.id, draft)
+      const saved =
+        mode.kind === 'editing'
+          ? await api.changeEvent(asset.id, mode.event, draft)
+          : await api.addEvent(asset.id, draft)
+      const photoProblem = await attach(saved.id, photos)
       await load()
       // The latest event decides the status, so the map needs the Asset again.
       onChanged(await api.getAsset(asset.id))
       setMode({ kind: 'reading' })
+      setProblem(photoProblem)
     } catch (failure) {
       setProblem((failure as Error).message)
       // Someone else may have changed the event, and the next try needs its new version.
       await load()
     }
     setSaving(false)
+  }
+
+  // The event is saved by now, so a photo that fails leaves the event in place and the user can add the photo again.
+  async function attach(eventId: string, photos: File[]) {
+    for (const photo of photos) {
+      try {
+        await api.attachPhoto(asset.id, eventId, photo)
+      } catch (failure) {
+        return `${photo.name} could not be uploaded. ${(failure as Error).message}`
+      }
+    }
+  }
+
+  async function removePhoto(event: AssetEvent, image: EventImage) {
+    try {
+      await api.removePhoto(asset.id, event.id, image.id)
+      await load()
+    } catch (failure) {
+      setProblem((failure as Error).message)
+    }
   }
 
   return (
@@ -131,6 +158,27 @@ export function AssetPanel({
                   </time>
                 </div>
                 {event.notes && <p className="mb-0 mt-1">{event.notes}</p>}
+                {event.images.length > 0 && (
+                  <div className="d-flex flex-wrap gap-2 mt-2">
+                    {event.images.map((image) => (
+                      <div className="position-relative" key={image.id}>
+                        <a href={image.readUrl} target="_blank" rel="noreferrer">
+                          <img
+                            className="photo-thumb img-thumbnail"
+                            src={image.readUrl}
+                            alt={`Photo of ${event.title}`}
+                          />
+                        </a>
+                        <button
+                          type="button"
+                          className="btn-close btn-sm position-absolute top-0 end-0 m-1 bg-body"
+                          aria-label="Remove photo"
+                          onClick={() => void removePhoto(event, image)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
               </li>
             ))}
           </ul>
@@ -141,6 +189,7 @@ export function AssetPanel({
           submitLabel={mode.kind === 'editing' ? 'Save Event' : 'Add Event'}
           saving={saving}
           problem={problem}
+          photoSlots={MAX_PHOTOS - (mode.kind === 'editing' ? mode.event.images.length : 0)}
           onSubmit={save}
           onCancel={() => {
             setProblem(undefined)
