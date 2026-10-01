@@ -26,7 +26,7 @@ export function PasswordForm() {
       <Field
         label="Current password"
         type="password"
-        autoComplete="current-password"
+        autoComplete="off"
         value={passwords.currentPassword}
         onChange={(currentPassword) => setPasswords({ ...passwords, currentPassword })}
       />

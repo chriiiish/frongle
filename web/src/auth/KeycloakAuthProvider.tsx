@@ -1,6 +1,6 @@
 import Keycloak from 'keycloak-js'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { AuthContext, type Auth } from './AuthContext'
+import { AuthContext, type Auth, type Profile } from './AuthContext'
 
 interface Config {
   keycloakUrl: string
@@ -8,10 +8,21 @@ interface Config {
   clientId: string
 }
 
+function profileFrom(client: Keycloak): Profile | undefined {
+  const claims = client.tokenParsed
+  if (!claims) return undefined
+  return {
+    firstName: claims.given_name ?? '',
+    lastName: claims.family_name ?? '',
+    email: claims.email ?? '',
+  }
+}
+
 export function KeycloakAuthProvider({ children }: { children: ReactNode }) {
   const [keycloak, setKeycloak] = useState<Keycloak>()
   const [authenticated, setAuthenticated] = useState(false)
   const [token, setToken] = useState<string>()
+  const [profile, setProfile] = useState<Profile>()
   const [accountUrl, setAccountUrl] = useState<string>()
 
   useEffect(() => {
@@ -29,6 +40,7 @@ export function KeycloakAuthProvider({ children }: { children: ReactNode }) {
       setAccountUrl(`${config.keycloakUrl.replace(/\/$/, '')}/realms/${config.realm}/account`)
       setKeycloak(client)
       setToken(client.token)
+      setProfile(profileFrom(client))
       setAuthenticated(isSignedIn)
     }
     void start()
@@ -42,14 +54,16 @@ export function KeycloakAuthProvider({ children }: { children: ReactNode }) {
       authenticated,
       token,
       accountUrl,
+      profile,
       logout: () => void keycloak?.logout(),
       // Forcing a refresh makes Keycloak issue a token that carries the latest name.
       refresh: async () => {
         await keycloak?.updateToken(-1)
         setToken(keycloak?.token)
+        if (keycloak) setProfile(profileFrom(keycloak))
       },
     }),
-    [keycloak, authenticated, token, accountUrl],
+    [keycloak, authenticated, token, accountUrl, profile],
   )
 
   return <AuthContext.Provider value={auth}>{children}</AuthContext.Provider>

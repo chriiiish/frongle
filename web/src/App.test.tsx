@@ -11,6 +11,7 @@ const signedOut: Auth = {
   authenticated: false,
   token: undefined,
   accountUrl: undefined,
+  profile: undefined,
   logout: vi.fn(),
   refresh: vi.fn(),
 }
@@ -18,6 +19,7 @@ const signedIn: Auth = {
   authenticated: true,
   token: 'jwt',
   accountUrl: 'https://kc.test/account',
+  profile: undefined,
   logout: vi.fn(),
   refresh: vi.fn(),
 }

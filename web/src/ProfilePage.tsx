@@ -12,20 +12,27 @@ interface Details {
 
 /** The profile page: the user reads and changes their own details, which Keycloak stores. */
 export function ProfilePage() {
-  const { token, accountUrl, refresh } = useAuth()
-  const [details, setDetails] = useState<Details>()
+  const { token, accountUrl, refresh, profile } = useAuth()
+  const [details, setDetails] = useState<Details | undefined>(profile)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string>()
+  const [loadError, setLoadError] = useState<string>()
 
   useEffect(() => {
     async function load() {
       const response = await fetch(accountUrl!, {
         headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
       })
+      if (!response.ok) {
+        setLoadError(`Keycloak returned status ${response.status}.`)
+        return
+      }
       const { firstName, lastName, email } = await response.json()
       setDetails({ firstName, lastName, email })
     }
-    void load()
+    load().catch((failure: Error) =>
+      setLoadError(`Keycloak could not be reached: ${failure.message}`),
+    )
   }, [token, accountUrl])
 
   async function saveDetails(event: FormEvent) {
@@ -36,10 +43,21 @@ export function ProfilePage() {
     if (!failure) await refresh()
   }
 
-  if (!details) return <p className="container-fluid py-3 px-md-4">Loading…</p>
+  if (!details) {
+    return (
+      <p className="container-fluid py-3 px-md-4" role={loadError ? 'alert' : undefined}>
+        {loadError ?? 'Loading…'}
+      </p>
+    )
+  }
   return (
     <div className="container-fluid py-3 px-md-4">
       <h2 className="display-6 mb-4">Profile</h2>
+      {loadError && (
+        <p className="text-danger" role="alert">
+          {loadError}
+        </p>
+      )}
       <div className="row g-4">
         <section className="col-lg-6">
           <form className="card card-body" aria-label="Details" onSubmit={saveDetails}>

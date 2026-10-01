@@ -1,9 +1,17 @@
 import { createContext, useContext } from 'react'
 
+/** The name and email that the user's token carries. */
+export interface Profile {
+  firstName: string
+  lastName: string
+  email: string
+}
+
 export interface Auth {
   authenticated: boolean
   token: string | undefined
   accountUrl: string | undefined
+  profile: Profile | undefined
   logout: () => void
   refresh: () => Promise<void>
 }

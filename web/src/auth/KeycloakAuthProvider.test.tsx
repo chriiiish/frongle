@@ -9,6 +9,7 @@ const init = vi.hoisted(() => vi.fn().mockResolvedValue(false))
 vi.mock('keycloak-js', () => ({
   default: class {
     token = 'old-token'
+    tokenParsed = { given_name: 'Morgan', family_name: 'Manager', email: 'manager@acme.test' }
     init = init
     updateToken = async () => {
       this.token = 'new-token'
@@ -84,4 +85,26 @@ it('gives the app a fresh token when it asks for a refresh', async () => {
   await userEvent.click(await screen.findByRole('button', { name: 'old-token' }))
 
   expect(await screen.findByRole('button', { name: 'new-token' })).toBeInTheDocument()
+})
+
+it('tells the app the name and email that the token carries', async () => {
+  init.mockResolvedValueOnce(true)
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue({
+      json: async () => ({ keycloakUrl: 'https://kc.test', realm: 'frongle', clientId: 'x' }),
+    }),
+  )
+  function ShowProfile() {
+    const { profile } = useAuth()
+    return <p>{profile && `${profile.firstName} ${profile.lastName} ${profile.email}`}</p>
+  }
+
+  render(
+    <KeycloakAuthProvider>
+      <ShowProfile />
+    </KeycloakAuthProvider>,
+  )
+
+  expect(await screen.findByText('Morgan Manager manager@acme.test')).toBeInTheDocument()
 })

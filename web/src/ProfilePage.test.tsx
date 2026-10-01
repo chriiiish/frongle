@@ -9,6 +9,7 @@ const auth: Auth = {
   authenticated: true,
   token: 'jwt',
   accountUrl: ACCOUNT_URL,
+  profile: undefined,
   logout: vi.fn(),
   refresh: vi.fn(),
 }
@@ -30,9 +31,9 @@ function stubKeycloak(saveResponse: object = { ok: true, status: 204 }) {
   return fetchMock
 }
 
-function renderProfilePage() {
+function renderProfilePage(signedInAs: Auth = auth) {
   render(
-    <AuthContext.Provider value={auth}>
+    <AuthContext.Provider value={signedInAs}>
       <ProfilePage />
     </AuthContext.Provider>,
   )
@@ -145,4 +146,37 @@ it('stacks the two forms on a phone and puts them side by side on desktop', asyn
 
   expect(details.closest('section')).toHaveClass('col-lg-6')
   expect(password.closest('section')).toHaveClass('col-lg-6')
+})
+
+it('starts with the details from the token and says so when Keycloak does not answer', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')))
+
+  renderProfilePage({
+    ...auth,
+    profile: { firstName: 'Tess', lastName: 'Token', email: 'tess@acme.test' },
+  })
+
+  expect(screen.getByLabelText('First name')).toHaveValue('Tess')
+  expect(screen.getByLabelText('Last name')).toHaveValue('Token')
+  expect(screen.getByLabelText('Email')).toHaveValue('tess@acme.test')
+  expect(await screen.findByRole('alert')).toHaveTextContent('Failed to fetch')
+})
+
+it('asks the browser not to fill in the current password', async () => {
+  stubKeycloak()
+  renderProfilePage()
+
+  expect(await screen.findByLabelText('Current password')).toHaveAttribute('autocomplete', 'off')
+})
+
+it('keeps the token details and shows an error when Keycloak refuses to share the details', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 403 }))
+
+  renderProfilePage({
+    ...auth,
+    profile: { firstName: 'Tess', lastName: 'Token', email: 'tess@acme.test' },
+  })
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('Keycloak returned status 403.')
+  expect(screen.getByLabelText('First name')).toHaveValue('Tess')
 })
