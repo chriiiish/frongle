@@ -10,6 +10,7 @@ import {
   useMapEvents,
 } from 'react-leaflet'
 import { type Area, type Asset, type AssetStatus, type Bounds } from './api'
+import { NewAssetDialog, type Place } from './NewAssetDialog'
 import { useApi } from './useApi'
 
 const AUCKLAND: [number, number] = [-36.8485, 174.7633]
@@ -52,6 +53,12 @@ function ViewWatcher({ onChange }: { onChange: (view: MapView) => void }) {
   return null
 }
 
+/** Tells the page where the user clicked the map. */
+function ClickWatcher({ onClick }: { onClick: (place: Place) => void }) {
+  useMapEvents({ click: (event) => onClick(event.latlng) })
+  return null
+}
+
 /** The API sends longitude first, as GeoJSON does, and Leaflet wants latitude first. */
 function toLatLngRings(area: Area): [number, number][][] {
   return area.boundary.coordinates.map((ring) => ring.map(([lng, lat]) => [lat, lng]))
@@ -64,6 +71,8 @@ export function MapPage() {
   const [assets, setAssets] = useState<Asset[]>([])
   const [view, setView] = useState<MapView>()
   const [problem, setProblem] = useState<string>()
+  const [adding, setAdding] = useState<Place>()
+  const [added, setAdded] = useState<string>()
   const zoomedIn = view !== undefined && view.zoom >= MIN_ASSET_ZOOM
 
   useEffect(() => {
@@ -87,6 +96,7 @@ export function MapPage() {
       <MapContainer className="map" center={AUCKLAND} zoom={START_ZOOM}>
         <TileLayer url={TILE_URL} attribution={TILE_CREDIT} />
         <ViewWatcher onChange={setView} />
+        <ClickWatcher onClick={setAdding} />
         {areas.map((area) => (
           <Polygon
             key={area.id}
@@ -105,6 +115,7 @@ export function MapPage() {
               key={asset.id}
               center={[asset.latitude, asset.longitude]}
               radius={9}
+              bubblingMouseEvents={false}
               pathOptions={{ color: STATUS_COLOUR[asset.status], fillOpacity: 0.9 }}
             >
               <Tooltip>{asset.friendlyId}</Tooltip>
@@ -117,12 +128,28 @@ export function MapPage() {
             Zoom in to see Assets.
           </p>
         )}
+        {added && (
+          <p className="alert alert-success py-1 px-3 shadow-sm" role="status">
+            Added {added}.
+          </p>
+        )}
         {problem && (
           <p className="alert alert-danger py-1 px-3 shadow-sm" role="alert">
             {problem}
           </p>
         )}
       </div>
+      {adding && (
+        <NewAssetDialog
+          location={adding}
+          onCreated={(asset) => {
+            setAssets((current) => [...current, asset])
+            setAdded(asset.friendlyId)
+            setAdding(undefined)
+          }}
+          onCancel={() => setAdding(undefined)}
+        />
+      )}
     </section>
   )
 }

@@ -1,5 +1,6 @@
 import { act, render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { AuthContext, type Auth } from './auth/AuthContext'
 import { MapPage } from './MapPage'
@@ -8,7 +9,7 @@ import { MapPage } from './MapPage'
 const leaflet = vi.hoisted(() => {
   const state = {
     zoom: 15,
-    handlers: {} as Record<string, () => void>,
+    handlers: {} as Record<string, (event?: unknown) => void>,
     // Leaflet gives every component the same map object, so the stand-in does too.
     map: {
       getBounds: () => ({
@@ -59,8 +60,8 @@ vi.mock('react-leaflet', () => ({
   ),
   Tooltip: ({ children }: { children: ReactNode }) => <span>{children}</span>,
   useMap: () => leaflet.map,
-  useMapEvents: (handlers: Record<string, () => void>) => {
-    leaflet.handlers = handlers
+  useMapEvents: (handlers: Record<string, (event?: unknown) => void>) => {
+    Object.assign(leaflet.handlers, handlers)
     return {}
   },
 }))
@@ -129,6 +130,7 @@ async function renderMapPage() {
 
 beforeEach(() => {
   leaflet.zoom = 15
+  leaflet.handlers = {}
 })
 afterEach(() => vi.unstubAllGlobals())
 
@@ -241,4 +243,49 @@ it('tells the user when the API refuses to answer', async () => {
 
   expect(await screen.findAllByRole('alert')).not.toHaveLength(0)
   expect(screen.getAllByRole('alert')[0]).toHaveTextContent('The API returned status 500.')
+})
+
+it('offers to add an asset where the user clicks the map', async () => {
+  stubApi()
+  await renderMapPage()
+
+  await act(async () => leaflet.handlers.click({ latlng: { lat: -37.0451, lng: 174.8552 } }))
+
+  expect(screen.getByRole('dialog', { name: 'Add an Asset' })).toHaveTextContent(
+    '-37.04510, 174.85520',
+  )
+})
+
+it('puts a new asset on the map as pending installation and says which friendly id it got', async () => {
+  const created = {
+    ...pole,
+    id: 'asset-9',
+    friendlyId: 'MN-SS-00001',
+    status: 'PendingInstallation',
+  }
+  const fetchMock = stubApi({ '/api/assets': [] })
+  fetchMock.mockImplementation(async (url: string, init?: RequestInit) => ({
+    ok: true,
+    status: init?.method === 'POST' ? 201 : 200,
+    json: async () => (init?.method === 'POST' ? created : url.startsWith('/api/areas') ? [] : []),
+  }))
+  await renderMapPage()
+  await act(async () => leaflet.handlers.click({ latlng: { lat: -37.045, lng: 174.855 } }))
+
+  await userEvent.click(screen.getByRole('button', { name: 'Add Asset' }))
+
+  const marker = await screen.findByTestId('asset')
+  expect(marker).toHaveAttribute('data-color', '#f0ad4e')
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  expect(screen.getByRole('status')).toHaveTextContent('Added MN-SS-00001')
+})
+
+it('closes the dialog without adding anything when the user cancels', async () => {
+  stubApi()
+  await renderMapPage()
+  await act(async () => leaflet.handlers.click({ latlng: { lat: -37.045, lng: 174.855 } }))
+
+  await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
 })
