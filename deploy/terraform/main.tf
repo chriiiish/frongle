@@ -18,6 +18,8 @@ module "vpc" {
 
   enable_nat_gateway = true
   single_nat_gateway = true
+
+  tags = { area = "network" }
 }
 
 module "eks" {
@@ -28,6 +30,8 @@ module "eks" {
   kubernetes_version = "1.33"
   vpc_id             = module.vpc.vpc_id
   subnet_ids         = module.vpc.private_subnets
+
+  tags = { area = "compute" }
 
   endpoint_public_access                   = true
   endpoint_public_access_cidrs             = var.admin_cidrs
@@ -48,6 +52,8 @@ resource "aws_ecr_repository" "repo" {
 
   name                 = "${var.name}/${each.key}"
   image_tag_mutability = "IMMUTABLE"
+
+  tags = { area = "registry" }
 
   image_scanning_configuration {
     scan_on_push = true

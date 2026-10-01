@@ -1,0 +1,58 @@
+mock_provider "aws" {
+  mock_data "aws_availability_zones" {
+    defaults = {
+      names = ["us-east-1a", "us-east-1b", "us-east-1c"]
+    }
+  }
+
+  mock_data "aws_caller_identity" {
+    defaults = {
+      account_id = "123456789012"
+      arn        = "arn:aws:iam::123456789012:user/test"
+    }
+  }
+
+  mock_data "aws_partition" {
+    defaults = {
+      partition  = "aws"
+      dns_suffix = "amazonaws.com"
+    }
+  }
+
+  mock_data "aws_iam_session_context" {
+    defaults = {
+      issuer_arn = "arn:aws:iam::123456789012:user/test"
+    }
+  }
+
+  mock_data "aws_iam_policy_document" {
+    defaults = {
+      json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
+    }
+  }
+}
+
+variables {
+  admin_cidrs = ["203.0.113.4/32"]
+}
+
+# The provider default_tags add project=frongle to every resource. A mock provider cannot
+# evaluate them, so these checks cover the area tag that each resource sets itself.
+run "every_resource_has_an_area_tag_for_cost_allocation" {
+  command = plan
+
+  assert {
+    condition     = alltrue([for repo in aws_ecr_repository.repo : repo.tags["area"] == "registry"])
+    error_message = "ECR repositories need area=registry."
+  }
+
+  assert {
+    condition     = aws_db_instance.db.tags["area"] == "database"
+    error_message = "The database needs area=database."
+  }
+
+  assert {
+    condition     = aws_db_subnet_group.db.tags["area"] == "database" && aws_security_group.db.tags["area"] == "database"
+    error_message = "Database support resources need area=database."
+  }
+}
