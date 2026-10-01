@@ -22,7 +22,7 @@ export function KeycloakAuthProvider({ children }: { children: ReactNode }) {
         clientId: config.clientId,
       })
       client.onTokenExpired = () => void client.updateToken(30)
-      const isSignedIn = await client.init({ onLoad: 'check-sso', pkceMethod: 'S256' })
+      const isSignedIn = await client.init({ onLoad: 'login-required', pkceMethod: 'S256' })
       if (cancelled) return
       setKeycloak(client)
       setAuthenticated(isSignedIn)
@@ -37,7 +37,6 @@ export function KeycloakAuthProvider({ children }: { children: ReactNode }) {
     () => ({
       authenticated,
       token: keycloak?.token,
-      login: () => void keycloak?.login(),
       logout: () => void keycloak?.logout(),
     }),
     [keycloak, authenticated],
