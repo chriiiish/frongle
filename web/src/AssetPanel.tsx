@@ -8,6 +8,7 @@ import {
   type EventImage,
 } from './api'
 import { EventForm } from './EventForm'
+import { HistoryList } from './HistoryList'
 import { useApi } from './useApi'
 
 const TYPE_LABEL: Record<AssetType, string> = {
@@ -36,16 +37,19 @@ export function AssetPanel({
   asset,
   onChanged,
   onClose,
+  onMove,
 }: {
   asset: Asset
   onChanged: (asset: Asset) => void
   onClose: () => void
+  onMove: () => void
 }) {
   const api = useApi()
   const [events, setEvents] = useState<AssetEvent[]>()
   const [mode, setMode] = useState<Mode>({ kind: 'reading' })
   const [saving, setSaving] = useState(false)
   const [problem, setProblem] = useState<string>()
+  const [tab, setTab] = useState<'events' | 'history'>('events')
 
   const load = useCallback(
     () =>
@@ -92,6 +96,14 @@ export function AssetPanel({
     }
   }
 
+  async function markRetagged() {
+    try {
+      onChanged(await api.markRetagged(asset.id))
+    } catch (failure) {
+      setProblem((failure as Error).message)
+    }
+  }
+
   async function removePhoto(event: AssetEvent, image: EventImage) {
     try {
       await api.removePhoto(asset.id, event.id, image.id)
@@ -113,19 +125,64 @@ export function AssetPanel({
             {TYPE_LABEL[asset.type]}{' '}
             <span className="badge text-bg-secondary">{STATUS_LABEL[asset.status]}</span>
           </p>
+          {asset.formerFriendlyIds.length > 0 && (
+            <p className="mb-2 text-body-secondary small">
+              Was {asset.formerFriendlyIds.join(', ')}
+            </p>
+          )}
         </div>
         <button type="button" className="btn-close" aria-label="Close" onClick={onClose} />
       </div>
 
-      {mode.kind === 'reading' ? (
-        <>
+      {asset.needsRetag && (
+        <div
+          className="alert alert-warning d-flex align-items-center justify-content-between gap-2"
+          role="status"
+        >
+          <span>Fit the new tag {asset.friendlyId} to the Asset.</span>
           <button
             type="button"
-            className="btn btn-primary mb-3"
-            onClick={() => setMode({ kind: 'adding' })}
+            className="btn btn-sm btn-outline-dark"
+            onClick={() => void markRetagged()}
           >
-            Add event
+            Tag fitted
           </button>
+        </div>
+      )}
+
+      {mode.kind === 'reading' && tab === 'history' ? (
+        <>
+          <div className="btn-group mb-3">
+            <button type="button" className="btn btn-outline-dark" onClick={() => setTab('events')}>
+              Events
+            </button>
+            <button type="button" className="btn btn-dark active">
+              History
+            </button>
+          </div>
+          <HistoryList assetId={asset.id} />
+        </>
+      ) : mode.kind === 'reading' ? (
+        <>
+          <div className="d-flex flex-wrap gap-2 mb-3">
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => setMode({ kind: 'adding' })}
+            >
+              Add event
+            </button>
+            <button type="button" className="btn btn-outline-dark" onClick={onMove}>
+              Move
+            </button>
+            <button
+              type="button"
+              className="btn btn-outline-dark"
+              onClick={() => setTab('history')}
+            >
+              History
+            </button>
+          </div>
           {problem && (
             <p className="alert alert-danger" role="alert">
               {problem}

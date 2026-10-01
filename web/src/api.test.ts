@@ -1,8 +1,8 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { ApiError, createApi } from './api'
+import { ApiError, createApi, type Asset } from './api'
 
 function stubFetch(response: object) {
-  const fetchMock = vi.fn(async () => response)
+  const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => response)
   vi.stubGlobal('fetch', fetchMock)
   return fetchMock
 }
@@ -69,4 +69,44 @@ it('says so when the API cannot be reached', async () => {
   await expect(createApi('jwt').listAreas()).rejects.toThrow(
     'The API could not be reached: offline',
   )
+})
+
+it('moves an asset and sends the version that the user read', async () => {
+  const fetchMock = stubFetch({ ok: true, status: 200, json: async () => ({ id: 'asset-1' }) })
+  const asset = { id: 'asset-1', version: 41 } as Asset
+
+  await createApi('jwt').moveAsset(asset, -37.05, 174.86)
+
+  expect(fetchMock).toHaveBeenCalledWith('/api/assets/asset-1/location', {
+    method: 'PUT',
+    headers: { Authorization: 'Bearer jwt', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ latitude: -37.05, longitude: 174.86, version: 41 }),
+  })
+})
+
+it('records that the new tag is fitted', async () => {
+  const fetchMock = stubFetch({ ok: true, status: 200, json: async () => ({}) })
+
+  await createApi('jwt').markRetagged('asset-1')
+
+  expect(fetchMock).toHaveBeenCalledWith('/api/assets/asset-1/retagged', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer jwt' },
+  })
+})
+
+it('searches by friendly id and escapes the text', async () => {
+  const fetchMock = stubFetch({ ok: true, json: async () => [] })
+
+  await createApi('jwt').searchAssets('MN LP&1')
+
+  expect(fetchMock.mock.calls[0][0]).toBe('/api/assets/search?q=MN%20LP%261')
+})
+
+it('reads the history of an asset', async () => {
+  const fetchMock = stubFetch({ ok: true, json: async () => [] })
+
+  await createApi('jwt').listHistory('asset-1')
+
+  expect(fetchMock.mock.calls[0][0]).toBe('/api/assets/asset-1/history')
 })

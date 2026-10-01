@@ -21,6 +21,11 @@ export interface Asset {
   latitude: number
   longitude: number
   status: AssetStatus
+  /** True after a move into another Area gave the Asset a new Friendly Id, until someone fits the new tag. */
+  needsRetag: boolean
+  formerFriendlyIds: string[]
+  /** The version to send back when moving the Asset. */
+  version: number
 }
 
 export type EventType = 'Installed' | 'Checked' | 'Repaired' | 'Maintained' | 'Removed'
@@ -53,6 +58,19 @@ export interface EventDraft {
   title: string
   notes: string | null
   occurredAt: string
+}
+
+/** One change in the history of an Asset, as the audit trail recorded it. */
+export interface HistoryChange {
+  entityType: 'Asset' | 'AssetEvent' | 'EventImage'
+  entityId: string
+  operation: 'Created' | 'Updated' | 'Deleted'
+  field: string
+  oldValue: string | null
+  newValue: string | null
+  changedBy: string
+  changedByName: string | null
+  changedAt: string
 }
 
 /** A box on the map, in degrees. */
@@ -132,6 +150,17 @@ export function createApi(token: string | undefined) {
       call<void>(token, `/api/assets/${assetId}/events/${eventId}/images/${imageId}`, {
         method: 'DELETE',
       }),
+    moveAsset: (asset: Asset, latitude: number, longitude: number) =>
+      call<Asset>(token, `/api/assets/${asset.id}/location`, {
+        method: 'PUT',
+        body: { latitude, longitude, version: asset.version },
+      }),
+    markRetagged: (assetId: string) =>
+      call<Asset>(token, `/api/assets/${assetId}/retagged`, { method: 'POST' }),
+    searchAssets: (text: string) =>
+      call<Asset[]>(token, `/api/assets/search?q=${encodeURIComponent(text)}`),
+    listHistory: (assetId: string) =>
+      call<HistoryChange[]>(token, `/api/assets/${assetId}/history`),
     getAsset: (id: string) => call<Asset>(token, `/api/assets/${id}`),
     listEvents: (assetId: string) => call<AssetEvent[]>(token, `/api/assets/${assetId}/events`),
     addEvent: (assetId: string, draft: EventDraft) =>

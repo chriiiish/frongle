@@ -22,6 +22,9 @@ const created = {
   latitude: -37.045,
   longitude: 174.855,
   status: 'PendingInstallation',
+  needsRetag: false,
+  formerFriendlyIds: [],
+  version: 1,
 }
 const where = { lat: -37.045, lng: 174.855 }
 
