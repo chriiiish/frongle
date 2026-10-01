@@ -1,11 +1,15 @@
 resource "aws_db_subnet_group" "db" {
   name       = var.name
   subnet_ids = module.vpc.private_subnets
+
+  tags = { area = "database" }
 }
 
 resource "aws_security_group" "db" {
   name   = "${var.name}-db"
   vpc_id = module.vpc.vpc_id
+
+  tags = { area = "database" }
 
   ingress {
     description     = "PostgreSQL from EKS nodes"
@@ -38,4 +42,6 @@ resource "aws_db_instance" "db" {
   deletion_protection       = true
   skip_final_snapshot       = false
   final_snapshot_identifier = "${var.name}-final"
+
+  tags = { area = "database" }
 }
