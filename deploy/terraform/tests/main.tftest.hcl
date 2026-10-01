@@ -57,12 +57,12 @@ run "every_resource_has_an_area_tag_for_cost_allocation" {
   }
 }
 
-run "the_cluster_runs_a_version_in_standard_support" {
+run "the_cluster_runs_a_version_in_standard_support_until_2027" {
   command = plan
 
   assert {
-    condition     = tonumber(split(".", module.eks.cluster_version)[1]) >= 34
-    error_message = "EKS 1.33 and older are in extended support, which costs more. Use 1.34 or newer."
+    condition     = tonumber(split(".", module.eks.cluster_version)[1]) >= 35
+    error_message = "EKS 1.34 leaves standard support on 2026-12-02. Use 1.35 or newer."
   }
 }
 
