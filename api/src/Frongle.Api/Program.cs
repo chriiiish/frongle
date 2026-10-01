@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Frongle.Api;
 using Frongle.Api.Auth;
 using Frongle.Api.Data;
 using Microsoft.AspNetCore.Authentication;
@@ -33,15 +34,37 @@ builder.Services.AddAuthorizationBuilder()
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
-    options.SwaggerDoc("v1", new OpenApiInfo { Title = "Frongle API", Version = "v1" });
-    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    options.SwaggerDoc("v1", new OpenApiInfo
     {
-        Type = SecuritySchemeType.Http,
-        Scheme = "bearer",
-        BearerFormat = "JWT",
-        Description = "A Keycloak access token.",
+        Title = "Frongle API",
+        Version = "v1",
+        Description = """
+            Frongle tracks assets such as light-posts, street signs, telephone poles, and traffic lights, and their maintenance and replacement.
+
+            **Sign in.** Select **Authorize** and sign in with your Frongle user. The page uses Keycloak, the same sign-in as the web app, so the same users and roles apply.
+
+            **Tenants.** Every request needs a token that carries a tenant. The API takes the tenant from the token and never from the request, so you see only your own organization's data.
+            """,
+        Contact = new OpenApiContact { Name = "Frongle", Url = new Uri("https://github.com/chriiiish/frongle") },
     });
-    options.OperationFilter<BearerSecurityOperationFilter>();
+
+    // These are the public Keycloak URLs, because the browser calls them.
+    var realmUrl = builder.Configuration["Authentication:Authority"]!.TrimEnd('/');
+    options.AddSecurityDefinition(KeycloakSecurityOperationFilter.SchemeName, new OpenApiSecurityScheme
+    {
+        Type = SecuritySchemeType.OAuth2,
+        Description = "Sign in with Keycloak. This is the same sign-in as the web app.",
+        Flows = new OpenApiOAuthFlows
+        {
+            AuthorizationCode = new OpenApiOAuthFlow
+            {
+                AuthorizationUrl = new Uri($"{realmUrl}/protocol/openid-connect/auth"),
+                TokenUrl = new Uri($"{realmUrl}/protocol/openid-connect/token"),
+                Scopes = new Dictionary<string, string> { ["openid"] = "Sign in and read your tenant and roles." },
+            },
+        },
+    });
+    options.OperationFilter<KeycloakSecurityOperationFilter>();
 });
 
 var app = builder.Build();
@@ -61,6 +84,10 @@ app.UseSwaggerUI(options =>
     options.RoutePrefix = "api/swagger";
     options.DocumentTitle = "Frongle API";
     options.SwaggerEndpoint("v1/swagger.json", "Frongle API v1");
+    // The page signs in as the web app does: the same Keycloak client, with PKCE and no client secret.
+    options.OAuthClientId(app.Configuration["Authentication:ClientId"] ?? "frongle-web");
+    options.OAuthUsePkce();
+    options.OAuthAppName("Frongle API");
     options.HeadContent = """
         <link rel="stylesheet" href="/api/swagger/frongle.css" />
         <link rel="icon" href="/api/swagger/logo.svg" type="image/svg+xml" />
@@ -78,15 +105,24 @@ app.UseSwaggerUI(options =>
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapGet("/health", () => Results.Ok()).AllowAnonymous();
+app.MapGet("/health", () => Results.Ok())
+    .AllowAnonymous()
+    .WithTags("Health")
+    .WithSummary("Check that the API is running")
+    .WithDescription("Returns 200 when the process is up. It does not check the database. Use /health/ready for that.")
+    .Produces(StatusCodes.Status200OK);
 app.MapHealthChecks("/health/ready", new() { Predicate = check => check.Tags.Contains("ready") }).AllowAnonymous();
 
-app.MapGet("/api/hello", (ClaimsPrincipal user) => new
-{
-    Greeting = "Hello from Frongle",
-    TenantId = user.FindFirstValue("tenant_id"),
-    Roles = user.FindAll(ClaimTypes.Role).Select(role => role.Value).ToArray(),
-});
+app.MapGet("/api/hello", (ClaimsPrincipal user) => new HelloResponse(
+        "Hello from Frongle",
+        user.FindFirstValue("tenant_id"),
+        user.FindAll(ClaimTypes.Role).Select(role => role.Value).ToArray()))
+    .WithTags("Hello")
+    .WithSummary("Say hello and show who you are")
+    .WithDescription("Returns a greeting with the tenant and roles that the API read from your token. Use it to check that signing in works.")
+    .Produces<HelloResponse>(StatusCodes.Status200OK)
+    .Produces(StatusCodes.Status401Unauthorized)
+    .Produces(StatusCodes.Status403Forbidden);
 
 app.Run();
 
