@@ -4,7 +4,7 @@ set -euo pipefail
 
 CLUSTER=frongle
 NAMESPACE=frongle
-KEYCLOAK_VERSION=26.7.5
+KEYCLOAK_VERSION="$(cat "$(dirname "$0")/../keycloak-version")"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 
 if ! kind get clusters | grep -qx "$CLUSTER"; then
