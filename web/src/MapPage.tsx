@@ -6,6 +6,7 @@ import {
   Polygon,
   TileLayer,
   Tooltip,
+  ZoomControl,
   useMap,
   useMapEvents,
 } from 'react-leaflet'
@@ -133,7 +134,8 @@ export function MapPage() {
 
   return (
     <section className="container-fluid p-0 p-md-3 position-relative" aria-label="Map">
-      <MapContainer className="map" center={AUCKLAND} zoom={START_ZOOM}>
+      <MapContainer className="map" center={AUCKLAND} zoom={START_ZOOM} zoomControl={false}>
+        <ZoomControl position="bottomleft" />
         <TileLayer url={TILE_URL} attribution={TILE_CREDIT} />
         <ViewWatcher onChange={setView} />
         <ClickWatcher onClick={clickMap} />
@@ -180,7 +182,7 @@ export function MapPage() {
             </CircleMarker>
           ))}
       </MapContainer>
-      <div className="position-absolute top-0 start-0 mt-3 mt-md-5 ms-3 ms-md-5 map-notice d-flex flex-column gap-2">
+      <div className="map-overlay position-absolute top-0 start-0 p-3 p-md-5 d-flex flex-column gap-2">
         <SearchBox onPick={showFound} />
         {moving ? (
           <div className="card card-body py-2 px-3 shadow-sm">
@@ -234,20 +236,18 @@ export function MapPage() {
             </button>
           ))
         )}
-      </div>
-      <div className="position-absolute top-0 start-50 translate-middle-x mt-3 mt-md-5 map-notice">
         {view && !zoomedIn && (
-          <p className="alert alert-info py-1 px-3 shadow-sm" role="status">
+          <p className="alert alert-info py-1 px-3 mb-0 shadow-sm" role="status">
             Zoom in to see Assets.
           </p>
         )}
         {added && (
-          <p className="alert alert-success py-1 px-3 shadow-sm" role="status">
+          <p className="alert alert-success py-1 px-3 mb-0 shadow-sm" role="status">
             Added {added}.
           </p>
         )}
         {problem && (
-          <p className="alert alert-danger py-1 px-3 shadow-sm" role="alert">
+          <p className="alert alert-danger py-1 px-3 mb-0 shadow-sm" role="alert">
             {problem}
           </p>
         )}

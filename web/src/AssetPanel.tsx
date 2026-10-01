@@ -114,10 +114,7 @@ export function AssetPanel({
   }
 
   return (
-    <aside
-      className="asset-panel position-absolute bottom-0 start-0 end-0 bg-body shadow p-3"
-      aria-label="Asset"
-    >
+    <aside className="asset-panel bg-body shadow p-3" aria-label="Asset">
       <div className="d-flex align-items-start justify-content-between">
         <div>
           <h2 className="h5 mb-0">{asset.friendlyId}</h2>
@@ -194,7 +191,7 @@ export function AssetPanel({
           )}
           <ul className="list-group list-group-flush">
             {events?.map((event) => (
-              <li className="list-group-item px-0" key={event.id}>
+              <li className="list-group-item bg-transparent px-0" key={event.id}>
                 <div className="d-flex justify-content-between">
                   <strong>{event.title}</strong>
                   <button

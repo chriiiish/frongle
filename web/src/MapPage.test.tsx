@@ -81,6 +81,7 @@ vi.mock('react-leaflet', () => ({
     </div>
   ),
   Tooltip: ({ children }: { children: ReactNode }) => <span>{children}</span>,
+  ZoomControl: () => null,
   useMap: () => leaflet.map,
   useMapEvents: (handlers: Record<string, (event?: unknown) => void>) => {
     Object.assign(leaflet.handlers, handlers)
