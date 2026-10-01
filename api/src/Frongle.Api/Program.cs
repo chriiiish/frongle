@@ -14,6 +14,8 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter(allowIntegerValues: false)));
+builder.Services.AddOptions<StorageOptions>().BindConfiguration("Storage");
+builder.Services.AddSingleton<IImageStorage, S3ImageStorage>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICaller, HttpCaller>();
 builder.Services.AddScoped<TenantConnectionInterceptor>();
@@ -140,6 +142,7 @@ app.MapGet("/api/hello", (ClaimsPrincipal user) => new HelloResponse(
 app.MapAreaEndpoints();
 app.MapAssetEndpoints();
 app.MapEventEndpoints();
+app.MapImageEndpoints();
 
 app.Run();
 

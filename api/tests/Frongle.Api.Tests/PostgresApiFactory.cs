@@ -1,3 +1,4 @@
+using Frongle.Api.Assets;
 using Frongle.Api.Data;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -22,6 +23,8 @@ public class PostgresApiFactory(PostgresFixture database) : FrongleApiFactory
             services.RemoveAll<IDbContextOptionsConfiguration<FrongleDbContext>>();
             services.AddDbContext<FrongleDbContext>(UsePostgres);
             services.AddDbContext<ProbeDbContext>(UsePostgres);
+            services.RemoveAll<IImageStorage>();
+            services.AddSingleton<IImageStorage, FakeImageStorage>();
             services.TryAddEnumerable(ServiceDescriptor.Singleton<Microsoft.AspNetCore.Hosting.IStartupFilter, ProbeEndpointsStartupFilter>());
         });
     }
