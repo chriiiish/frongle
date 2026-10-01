@@ -12,7 +12,8 @@ public sealed class HttpCaller(IHttpContextAccessor accessor) : ICaller
     public string? TenantId => User?.FindFirstValue("tenant_id");
 
     /// <inheritdoc />
-    public string? UserId => User?.FindFirstValue(ClaimTypes.NameIdentifier);
+    // Whether the token handler renames "sub" to a name identifier claim depends on its settings, so accept both.
+    public string? UserId => User?.FindFirstValue("sub") ?? User?.FindFirstValue(ClaimTypes.NameIdentifier);
 
     /// <inheritdoc />
     public string? Name => User?.FindFirstValue("name") ?? User?.FindFirstValue("preferred_username");
