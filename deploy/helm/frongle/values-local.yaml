@@ -22,6 +22,8 @@ postgres:
 
 keycloak:
   instances: 1
+  devOrigins:
+    - http://localhost:5173 # npm run dev in web/
   resources:
     requests:
       memory: 600Mi
