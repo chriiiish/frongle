@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
+using Npgsql;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -85,7 +86,14 @@ var app = builder.Build();
 if (app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
 {
     using var scope = app.Services.CreateScope();
-    scope.ServiceProvider.GetRequiredService<FrongleDbContext>().Database.Migrate();
+    var database = scope.ServiceProvider.GetRequiredService<FrongleDbContext>().Database;
+    database.Migrate();
+
+    // The first connection loaded the Postgres types before the migration created PostGIS, so it knows no geometry type.
+    var connection = (NpgsqlConnection)database.GetDbConnection();
+    connection.Open();
+    connection.ReloadTypes();
+    connection.Close();
 }
 
 // Under /api because the ingress sends only /api/* to this service. These middlewares run before
