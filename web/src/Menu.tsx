@@ -1,10 +1,13 @@
 import { useState } from 'react'
 import { Link, NavLink } from 'react-router'
+import type { Me } from './useMe'
 
-/** The main menu: the Frongle brand, links to Home and Map, and Logout. It collapses behind a toggle on a phone. */
-export function Menu({ onLogout }: { onLogout: () => void }) {
+/** The main menu: the Frongle brand, links to Home and Map, and an account dropdown that shows the user and their tenant. It collapses behind a toggle on a phone. */
+export function Menu({ me, onLogout }: { me: Me | undefined; onLogout: () => void }) {
   const [open, setOpen] = useState(false)
+  const [accountOpen, setAccountOpen] = useState(false)
   const close = () => setOpen(false)
+  const closeAccount = () => setAccountOpen(false)
 
   return (
     <nav
@@ -38,14 +41,52 @@ export function Menu({ onLogout }: { onLogout: () => void }) {
                 Map
               </NavLink>
             </li>
-            <li className="nav-item">
+            <li className="nav-item dropdown">
               <button
-                className="btn btn-outline-primary my-2 my-md-0"
+                className="btn btn-outline-primary dropdown-toggle text-start my-2 my-md-0"
                 type="button"
-                onClick={onLogout}
+                aria-expanded={accountOpen}
+                onClick={() => setAccountOpen(!accountOpen)}
               >
-                Logout
+                {me ? (
+                  <>
+                    {me.name}
+                    <small className="d-block">{me.tenant}</small>
+                  </>
+                ) : (
+                  'Account'
+                )}
               </button>
+              <ul
+                className={`dropdown-menu dropdown-menu-md-end${accountOpen ? ' show' : ''}`}
+                aria-label="Account"
+              >
+                <li>
+                  <Link className="dropdown-item" to="/profile" onClick={closeAccount}>
+                    Profile
+                  </Link>
+                </li>
+                <li>
+                  <Link className="dropdown-item" to="/tenant-settings" onClick={closeAccount}>
+                    Tenant Settings
+                  </Link>
+                </li>
+                <li>
+                  <hr className="dropdown-divider" />
+                </li>
+                <li>
+                  <button
+                    className="dropdown-item"
+                    type="button"
+                    onClick={() => {
+                      closeAccount()
+                      onLogout()
+                    }}
+                  >
+                    Logout
+                  </button>
+                </li>
+              </ul>
             </li>
           </ul>
         </div>

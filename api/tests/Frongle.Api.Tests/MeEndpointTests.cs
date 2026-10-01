@@ -5,7 +5,7 @@ namespace Frongle.Api.Tests;
 
 public class MeEndpointTests(FrongleApiFactory factory) : IClassFixture<FrongleApiFactory>
 {
-    private sealed record Me(string Name);
+    private sealed record Me(string Name, string Tenant);
 
     [Fact]
     public async Task Get_me_without_a_token_is_unauthorized()
@@ -45,5 +45,15 @@ public class MeEndpointTests(FrongleApiFactory factory) : IClassFixture<FrongleA
         var me = await client.GetFromJsonAsync<Me>("/api/me");
 
         Assert.Equal("team@acme.test", me!.Name);
+    }
+
+    [Fact]
+    public async Task Get_me_returns_the_tenant_from_the_token()
+    {
+        var client = factory.CreateClientFor("acme", "maintenance-manager");
+
+        var me = await client.GetFromJsonAsync<Me>("/api/me");
+
+        Assert.Equal("acme", me!.Tenant);
     }
 }

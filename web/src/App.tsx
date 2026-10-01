@@ -2,10 +2,12 @@ import { Route, Routes } from 'react-router'
 import { useAuth } from './auth/AuthContext'
 import { MapPage } from './MapPage'
 import { Menu } from './Menu'
+import { useMe } from './useMe'
 import { Welcome } from './Welcome'
 
 export default function App() {
   const { authenticated, token, logout } = useAuth()
+  const { me, error } = useMe(authenticated ? token : undefined)
 
   if (!authenticated) {
     return (
@@ -17,14 +19,14 @@ export default function App() {
 
   return (
     <>
-      <Menu onLogout={logout} />
+      <Menu me={me} onLogout={logout} />
       <main>
         <Routes>
           <Route
             path="/"
             element={
               <div className="container-fluid py-3 px-md-4">
-                <Welcome token={token} />
+                <Welcome me={me} error={error} />
               </div>
             }
           />

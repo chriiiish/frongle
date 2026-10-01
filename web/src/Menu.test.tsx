@@ -1,13 +1,16 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { expect, it, vi } from 'vitest'
 import { Menu } from './Menu'
+import type { Me } from './useMe'
 
-function renderMenu(path = '/', onLogout = vi.fn()) {
+const morgan = { name: 'Morgan Manager', tenant: 'acme' }
+
+function renderMenu(path = '/', onLogout = vi.fn(), me: Me | null = morgan) {
   render(
     <MemoryRouter initialEntries={[path]}>
-      <Menu onLogout={onLogout} />
+      <Menu me={me ?? undefined} onLogout={onLogout} />
     </MemoryRouter>,
   )
   return onLogout
@@ -46,14 +49,6 @@ it('has a Map link to the map page that is current on the map page', () => {
   expect(screen.getByRole('link', { name: 'Home' })).not.toHaveClass('active')
 })
 
-it('has a Logout link that signs the user out', async () => {
-  const onLogout = renderMenu()
-
-  await userEvent.click(screen.getByRole('button', { name: 'Logout' }))
-
-  expect(onLogout).toHaveBeenCalledOnce()
-})
-
 it('keeps the menu collapsed on a phone until the toggle is pressed', async () => {
   renderMenu()
   const toggle = screen.getByRole('button', { name: 'Toggle navigation' })
@@ -86,8 +81,68 @@ it('spans the full width of the screen like the map page', () => {
   )
 })
 
-it('shows Logout as a button that stands apart from the page links', () => {
+const accountToggle = () => screen.getByRole('button', { name: /Morgan Manager/ })
+
+it('shows the user name and tenant in the menu bar', () => {
   renderMenu()
 
-  expect(screen.getByRole('button', { name: 'Logout' })).toHaveClass('btn', 'btn-outline-primary')
+  expect(accountToggle()).toHaveTextContent('Morgan Manager')
+  expect(accountToggle()).toHaveTextContent('acme')
+})
+
+it('shows a plain Account label until the API has said who the user is', () => {
+  renderMenu('/', vi.fn(), null)
+
+  expect(screen.getByRole('button', { name: 'Account' })).toBeInTheDocument()
+})
+
+it('keeps the account dropdown closed until the user opens it', async () => {
+  renderMenu()
+  const dropdown = screen.getByRole('list', { name: 'Account' })
+
+  expect(accountToggle()).toHaveAttribute('aria-expanded', 'false')
+  expect(dropdown).not.toHaveClass('show')
+
+  await userEvent.click(accountToggle())
+
+  expect(accountToggle()).toHaveAttribute('aria-expanded', 'true')
+  expect(dropdown).toHaveClass('show')
+})
+
+it('lists Profile, Tenant Settings, a separator, and Logout in that order', async () => {
+  renderMenu()
+  await userEvent.click(accountToggle())
+
+  const items = within(screen.getByRole('list', { name: 'Account' })).getAllByRole('listitem')
+
+  expect(items.map((item) => item.textContent || 'separator')).toEqual([
+    'Profile',
+    'Tenant Settings',
+    'separator',
+    'Logout',
+  ])
+  expect(screen.getByRole('separator')).toHaveClass('dropdown-divider')
+  expect(screen.getByRole('link', { name: 'Profile' })).toHaveAttribute('href', '/profile')
+  expect(screen.getByRole('link', { name: 'Tenant Settings' })).toHaveAttribute(
+    'href',
+    '/tenant-settings',
+  )
+})
+
+it('signs the user out from the account dropdown', async () => {
+  const onLogout = renderMenu()
+  await userEvent.click(accountToggle())
+
+  await userEvent.click(screen.getByRole('button', { name: 'Logout' }))
+
+  expect(onLogout).toHaveBeenCalledOnce()
+})
+
+it('closes the account dropdown after the user picks an option', async () => {
+  renderMenu()
+  await userEvent.click(accountToggle())
+
+  await userEvent.click(screen.getByRole('link', { name: 'Profile' }))
+
+  expect(accountToggle()).toHaveAttribute('aria-expanded', 'false')
 })

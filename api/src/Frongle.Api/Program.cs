@@ -114,10 +114,11 @@ app.MapGet("/health", () => Results.Ok())
 app.MapHealthChecks("/health/ready", new() { Predicate = check => check.Tags.Contains("ready") }).AllowAnonymous();
 
 app.MapGet("/api/me", (ClaimsPrincipal user) => new MeResponse(
-        user.FindFirstValue("name") ?? user.FindFirstValue("preferred_username")))
+        user.FindFirstValue("name") ?? user.FindFirstValue("preferred_username"),
+        user.FindFirstValue("tenant_id")))
     .WithTags("Me")
     .WithSummary("Show who you are")
-    .WithDescription("Returns your full name from your token, or your username when the token has no name. Use it to check that signing in works.")
+    .WithDescription("Returns your full name from your token, or your username when the token has no name, and your tenant. Use it to check that signing in works.")
     .Produces<MeResponse>(StatusCodes.Status200OK)
     .Produces(StatusCodes.Status401Unauthorized)
     .Produces(StatusCodes.Status403Forbidden);
