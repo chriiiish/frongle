@@ -1,6 +1,7 @@
 import { useState } from 'react'
+import { Link, NavLink } from 'react-router'
 
-/** The main menu: the Frongle brand, a Home link, and Logout. It collapses behind a toggle on a phone. */
+/** The main menu: the Frongle brand, links to Home and Map, and Logout. It collapses behind a toggle on a phone. */
 export function Menu({ onLogout }: { onLogout: () => void }) {
   const [open, setOpen] = useState(false)
 
@@ -10,10 +11,10 @@ export function Menu({ onLogout }: { onLogout: () => void }) {
       aria-label="Main"
     >
       <div className="container">
-        <a className="navbar-brand d-flex align-items-center gap-2" href="/">
+        <Link className="navbar-brand d-flex align-items-center gap-2" to="/">
           <img src="/logo.svg" alt="Frongle logo" width="40" height="40" />
           <h1 className="h3 m-0">Frongle</h1>
-        </a>
+        </Link>
         <button
           className="navbar-toggler"
           type="button"
@@ -27,9 +28,14 @@ export function Menu({ onLogout }: { onLogout: () => void }) {
         <div id="main-menu" className={`navbar-collapse collapse${open ? ' show' : ''}`}>
           <ul className="navbar-nav ms-auto">
             <li className="nav-item">
-              <a className="nav-link active" aria-current="page" href="/">
+              <NavLink className="nav-link" to="/" end>
                 Home
-              </a>
+              </NavLink>
+            </li>
+            <li className="nav-item">
+              <NavLink className="nav-link" to="/map">
+                Map
+              </NavLink>
             </li>
             <li className="nav-item">
               <button className="nav-link" type="button" onClick={onLogout}>

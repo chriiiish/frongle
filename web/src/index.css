@@ -35,6 +35,11 @@ h6 {
   --bs-btn-font-weight: 600;
 }
 
+/* Leaflet draws nothing until its container has a height. */
+.map {
+  height: 70vh;
+}
+
 @media (min-width: 768px) {
   .container {
     max-width: 40rem;

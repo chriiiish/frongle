@@ -1,6 +1,8 @@
+import { Route, Routes } from 'react-router'
 import { useAuth } from './auth/AuthContext'
-import { Hello } from './Hello'
+import { MapPage } from './MapPage'
 import { Menu } from './Menu'
+import { Welcome } from './Welcome'
 
 export default function App() {
   const { authenticated, token, logout } = useAuth()
@@ -17,7 +19,10 @@ export default function App() {
     <>
       <Menu onLogout={logout} />
       <main className="container py-3">
-        <Hello token={token} />
+        <Routes>
+          <Route path="/" element={<Welcome token={token} />} />
+          <Route path="/map" element={<MapPage />} />
+        </Routes>
       </main>
     </>
   )
