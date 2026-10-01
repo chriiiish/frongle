@@ -59,7 +59,9 @@ it('welcomes a signed-in user by the name that the API returns', async () => {
 
   renderApp(signedIn)
 
-  expect(await screen.findByRole('heading', { name: 'Welcome, Morgan Manager' })).toBeInTheDocument()
+  expect(
+    await screen.findByRole('heading', { name: 'Welcome, Morgan Manager' }),
+  ).toBeInTheDocument()
   expect(fetchMock).toHaveBeenCalledWith('/api/me', {
     headers: { Authorization: 'Bearer jwt' },
   })
