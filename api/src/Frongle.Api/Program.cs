@@ -4,6 +4,7 @@ using Frongle.Api.Data;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.OpenApi;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -29,6 +30,23 @@ builder.Services.AddAuthorizationBuilder()
         .RequireClaim("tenant_id")
         .Build());
 
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new OpenApiInfo { Title = "Frongle API", Version = "v1" });
+    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        Description = "A Keycloak access token.",
+    });
+    options.AddSecurityRequirement(document => new OpenApiSecurityRequirement
+    {
+        [new OpenApiSecuritySchemeReference("Bearer", document)] = [],
+    });
+});
+
 var app = builder.Build();
 
 if (app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
@@ -36,6 +54,15 @@ if (app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
     using var scope = app.Services.CreateScope();
     scope.ServiceProvider.GetRequiredService<FrongleDbContext>().Database.Migrate();
 }
+
+// Under /api because the ingress sends only /api/* to this service. These middlewares run before
+// authorization, so the spec and the page are public. They list the endpoints but expose no data.
+app.UseSwagger(options => options.RouteTemplate = "api/swagger/{documentName}/swagger.json");
+app.UseSwaggerUI(options =>
+{
+    options.RoutePrefix = "api/swagger";
+    options.SwaggerEndpoint("v1/swagger.json", "Frongle API v1");
+});
 
 app.UseAuthentication();
 app.UseAuthorization();
