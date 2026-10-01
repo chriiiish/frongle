@@ -1,14 +1,19 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useAuth } from './AuthContext'
 import { KeycloakAuthProvider } from './KeycloakAuthProvider'
 
 const init = vi.hoisted(() => vi.fn().mockResolvedValue(false))
+const clients = vi.hoisted(() => [] as { token: string; onAuthRefreshSuccess?: () => void }[])
 
 vi.mock('keycloak-js', () => ({
   default: class {
     token = 'old-token'
+    onAuthRefreshSuccess?: () => void
+    constructor() {
+      clients.push(this)
+    }
     tokenParsed = { given_name: 'Morgan', family_name: 'Manager', email: 'manager@acme.test' }
     init = init
     updateToken = async () => {
@@ -107,4 +112,29 @@ it('tells the app the name and email that the token carries', async () => {
   )
 
   expect(await screen.findByText('Morgan Manager manager@acme.test')).toBeInTheDocument()
+})
+
+it('gives the app the new token when Keycloak renews it in the background', async () => {
+  init.mockResolvedValueOnce(true)
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue({
+      json: async () => ({ keycloakUrl: 'https://kc.test', realm: 'frongle', clientId: 'x' }),
+    }),
+  )
+  function ShowToken() {
+    return <p>{useAuth().token}</p>
+  }
+  render(
+    <KeycloakAuthProvider>
+      <ShowToken />
+    </KeycloakAuthProvider>,
+  )
+  await screen.findByText('old-token')
+
+  const client = clients[clients.length - 1]
+  client.token = 'renewed-token'
+  act(() => client.onAuthRefreshSuccess?.())
+
+  expect(await screen.findByText('renewed-token')).toBeInTheDocument()
 })

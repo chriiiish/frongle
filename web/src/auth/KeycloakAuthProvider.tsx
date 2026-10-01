@@ -35,6 +35,11 @@ export function KeycloakAuthProvider({ children }: { children: ReactNode }) {
         clientId: config.clientId,
       })
       client.onTokenExpired = () => void client.updateToken(30)
+      // Without this, the app keeps sending the first token after Keycloak has renewed it, and Keycloak answers 401.
+      client.onAuthRefreshSuccess = () => {
+        setToken(client.token)
+        setProfile(profileFrom(client))
+      }
       const isSignedIn = await client.init({ onLoad: 'login-required', pkceMethod: 'S256' })
       if (cancelled) return
       setAccountUrl(`${config.keycloakUrl.replace(/\/$/, '')}/realms/${config.realm}/account`)
