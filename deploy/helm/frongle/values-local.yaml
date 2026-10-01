@@ -39,15 +39,21 @@ keycloak:
     - username: manager@acme.test
       password: password
       email: manager@acme.test
+      firstName: Morgan
+      lastName: Manager
       tenantId: acme
       roles: [maintenance-manager]
     - username: team@acme.test
       password: password
       email: team@acme.test
+      firstName: Taylor
+      lastName: Team
       tenantId: acme
       roles: [work-team]
     - username: manager@globex.test
       password: password
       email: manager@globex.test
+      firstName: Glenn
+      lastName: Globex
       tenantId: globex
       roles: [maintenance-manager]

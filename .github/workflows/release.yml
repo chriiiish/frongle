@@ -134,7 +134,7 @@ jobs:
             curl -fsS --retry 30 --retry-delay 10 --retry-all-errors -o /dev/null "https://$host$path"
           done
           # Without a token the API must answer 401, which shows that the request reached it.
-          test "$(curl -sS -o /dev/null -w '%{http_code}' "https://$host/api/hello")" = 401
+          test "$(curl -sS -o /dev/null -w '%{http_code}' "https://$host/api/me")" = 401
 
       - name: Remove this runner from the Kubernetes API allow list
         if: always()

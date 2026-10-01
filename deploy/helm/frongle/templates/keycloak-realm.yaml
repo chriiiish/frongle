@@ -56,6 +56,8 @@ spec:
       - username: {{ .username }}
         enabled: true
         email: {{ .email }}
+        firstName: {{ .firstName }}
+        lastName: {{ .lastName }}
         emailVerified: true
         attributes:
           tenant_id:
@@ -66,5 +68,11 @@ spec:
             temporary: false
         realmRoles:
           {{- toYaml .roles | nindent 10 }}
+        # An imported user does not get the realm's default roles. Without these two account roles, the token has no
+        # "account" audience, and the Keycloak account service answers 401 to the Profile page.
+        clientRoles:
+          account:
+            - view-profile
+            - manage-account
       {{- end }}
     {{- end }}
