@@ -22,14 +22,14 @@ function renderApp(auth: Auth, path = '/') {
 
 afterEach(() => vi.unstubAllGlobals())
 
-it('shows the menu with Home, Map, and Logout to a signed-in user', () => {
+it('shows the menu with Home, Map, and the account dropdown to a signed-in user', () => {
   vi.stubGlobal('fetch', vi.fn().mockReturnValue(new Promise(() => {})))
 
   renderApp(signedIn)
 
   expect(screen.getByRole('link', { name: 'Home' })).toBeInTheDocument()
   expect(screen.getByRole('link', { name: 'Map' })).toBeInTheDocument()
-  expect(screen.getByRole('button', { name: 'Logout' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Account' })).toBeInTheDocument()
 })
 
 it('signs the user out from the menu', async () => {
@@ -53,7 +53,7 @@ it('shows no menu and no map while the sign-in redirect happens', () => {
 it('welcomes a signed-in user by the name that the API returns', async () => {
   const fetchMock = vi.fn().mockResolvedValue({
     ok: true,
-    json: async () => ({ name: 'Morgan Manager' }),
+    json: async () => ({ name: 'Morgan Manager', tenant: 'acme' }),
   })
   vi.stubGlobal('fetch', fetchMock)
 
@@ -70,7 +70,10 @@ it('welcomes a signed-in user by the name that the API returns', async () => {
 it('gives the welcome page the full screen width and a large heading on desktop', async () => {
   vi.stubGlobal(
     'fetch',
-    vi.fn().mockResolvedValue({ ok: true, json: async () => ({ name: 'Morgan Manager' }) }),
+    vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ name: 'Morgan Manager', tenant: 'acme' }),
+    }),
   )
 
   renderApp(signedIn)
@@ -78,6 +81,20 @@ it('gives the welcome page the full screen width and a large heading on desktop'
   const heading = await screen.findByRole('heading', { name: 'Welcome, Morgan Manager' })
   expect(heading.closest('.container-fluid')).not.toBeNull()
   expect(heading).toHaveClass('display-5')
+})
+
+it('shows the user name in the menu bar', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ name: 'Morgan Manager', tenant: 'acme' }),
+    }),
+  )
+
+  renderApp(signedIn, '/map')
+
+  expect(await screen.findByRole('button', { name: 'Morgan Manager' })).toBeInTheDocument()
 })
 
 it('does not show the map on the welcome page', () => {
@@ -104,12 +121,10 @@ it('shows an error when the API cannot be reached', async () => {
   expect(await screen.findByRole('alert')).toHaveTextContent('Failed to fetch')
 })
 
-it('shows the map on the map page to a signed-in user without calling the API', () => {
-  const fetchMock = vi.fn()
-  vi.stubGlobal('fetch', fetchMock)
+it('shows the map on the map page to a signed-in user', () => {
+  vi.stubGlobal('fetch', vi.fn().mockReturnValue(new Promise(() => {})))
 
   renderApp(signedIn, '/map')
 
   expect(screen.getByRole('region', { name: 'Map' })).toBeInTheDocument()
-  expect(fetchMock).not.toHaveBeenCalled()
 })
