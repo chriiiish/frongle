@@ -113,14 +113,13 @@ app.MapGet("/health", () => Results.Ok())
     .Produces(StatusCodes.Status200OK);
 app.MapHealthChecks("/health/ready", new() { Predicate = check => check.Tags.Contains("ready") }).AllowAnonymous();
 
-app.MapGet("/api/hello", (ClaimsPrincipal user) => new HelloResponse(
-        "Hello from Frongle",
-        user.FindFirstValue("tenant_id"),
-        user.FindAll(ClaimTypes.Role).Select(role => role.Value).ToArray()))
-    .WithTags("Hello")
-    .WithSummary("Say hello and show who you are")
-    .WithDescription("Returns a greeting with the tenant and roles that the API read from your token. Use it to check that signing in works.")
-    .Produces<HelloResponse>(StatusCodes.Status200OK)
+app.MapGet("/api/me", (ClaimsPrincipal user) => new MeResponse(
+        user.FindFirstValue("name") ?? user.FindFirstValue("preferred_username"),
+        user.FindFirstValue("tenant_id")))
+    .WithTags("Me")
+    .WithSummary("Show who you are")
+    .WithDescription("Returns your full name from your token, or your username when the token has no name, and your tenant. Use it to check that signing in works.")
+    .Produces<MeResponse>(StatusCodes.Status200OK)
     .Produces(StatusCodes.Status401Unauthorized)
     .Produces(StatusCodes.Status403Forbidden);
 

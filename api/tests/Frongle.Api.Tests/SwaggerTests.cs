@@ -14,11 +14,11 @@ public class SwaggerTests(FrongleApiFactory factory) : IClassFixture<FrongleApiF
     }
 
     [Fact]
-    public async Task The_openapi_spec_is_public_and_lists_the_hello_endpoint()
+    public async Task The_openapi_spec_is_public_and_lists_the_me_endpoint()
     {
         var spec = await GetOpenApiSpec();
 
-        Assert.True(spec.GetProperty("paths").TryGetProperty("/api/hello", out _));
+        Assert.True(spec.GetProperty("paths").TryGetProperty("/api/me", out _));
     }
 
     [Fact]
@@ -39,7 +39,7 @@ public class SwaggerTests(FrongleApiFactory factory) : IClassFixture<FrongleApiF
     {
         var spec = await GetOpenApiSpec();
 
-        var security = spec.GetProperty("paths").GetProperty("/api/hello").GetProperty("get").GetProperty("security");
+        var security = spec.GetProperty("paths").GetProperty("/api/me").GetProperty("get").GetProperty("security");
         Assert.True(security[0].TryGetProperty("Keycloak", out _));
     }
 
@@ -106,19 +106,19 @@ public class SwaggerTests(FrongleApiFactory factory) : IClassFixture<FrongleApiF
     }
 
     [Fact]
-    public async Task The_hello_operation_is_documented_with_its_responses()
+    public async Task The_me_operation_is_documented_with_its_responses()
     {
         var spec = await GetOpenApiSpec();
 
-        var hello = spec.GetProperty("paths").GetProperty("/api/hello").GetProperty("get");
-        Assert.False(string.IsNullOrWhiteSpace(hello.GetProperty("summary").GetString()));
-        Assert.False(string.IsNullOrWhiteSpace(hello.GetProperty("description").GetString()));
-        Assert.Equal("Hello", hello.GetProperty("tags")[0].GetString());
-        var responses = hello.GetProperty("responses");
+        var me = spec.GetProperty("paths").GetProperty("/api/me").GetProperty("get");
+        Assert.False(string.IsNullOrWhiteSpace(me.GetProperty("summary").GetString()));
+        Assert.False(string.IsNullOrWhiteSpace(me.GetProperty("description").GetString()));
+        Assert.Equal("Me", me.GetProperty("tags")[0].GetString());
+        var responses = me.GetProperty("responses");
         Assert.True(responses.TryGetProperty("200", out var ok));
         Assert.True(responses.TryGetProperty("401", out _));
         Assert.True(responses.TryGetProperty("403", out _));
-        Assert.EndsWith("/HelloResponse", ok.GetProperty("content").GetProperty("application/json").GetProperty("schema").GetProperty("$ref").GetString());
+        Assert.EndsWith("/MeResponse", ok.GetProperty("content").GetProperty("application/json").GetProperty("schema").GetProperty("$ref").GetString());
     }
 
     [Fact]
