@@ -4,6 +4,8 @@
   --bs-primary-rgb: 234, 78, 45;
   --bs-body-bg: #efe4b4;
   --bs-body-color: #191919;
+  /* Bootstrap's pale grey border disappears on the cream background. This dark tan keeps a 3:1 contrast. */
+  --bs-border-color: #7a7050;
   --bs-body-font-family: Cabin, system-ui, sans-serif;
   --bs-heading-color: #191919;
   --bs-link-color-rgb: 25, 25, 25;
@@ -35,8 +37,29 @@ h6 {
   --bs-btn-font-weight: 600;
 }
 
+/* Ink text on a red outline keeps the button readable on the cream background. */
+.btn-outline-primary {
+  --bs-btn-color: #191919;
+  --bs-btn-border-color: #ea4e2d;
+  --bs-btn-hover-color: #191919;
+  --bs-btn-hover-bg: #ea4e2d;
+  --bs-btn-hover-border-color: #ea4e2d;
+  --bs-btn-active-color: #191919;
+  --bs-btn-active-bg: #d6401f;
+  --bs-btn-active-border-color: #d6401f;
+  --bs-btn-focus-shadow-rgb: 234, 78, 45;
+  --bs-btn-font-weight: 600;
+}
+
+/* Leaflet draws nothing until its container has a height. On a phone the map fills the screen below the menu. */
+.map {
+  height: calc(100dvh - 4.5rem);
+  min-height: 20rem;
+}
+
 @media (min-width: 768px) {
-  .container {
-    max-width: 40rem;
+  .map {
+    height: calc(100dvh - 6rem);
+    border-radius: 0.5rem;
   }
 }
