@@ -4,8 +4,8 @@ import { afterEach, expect, it, vi } from 'vitest'
 import App from './App'
 import { AuthContext, type Auth } from './auth/AuthContext'
 
-const signedOut: Auth = { authenticated: false, token: undefined, login: vi.fn(), logout: vi.fn() }
-const signedIn: Auth = { authenticated: true, token: 'jwt', login: vi.fn(), logout: vi.fn() }
+const signedOut: Auth = { authenticated: false, token: undefined, logout: vi.fn() }
+const signedIn: Auth = { authenticated: true, token: 'jwt', logout: vi.fn() }
 
 function renderApp(auth: Auth) {
   render(
@@ -17,30 +17,30 @@ function renderApp(auth: Auth) {
 
 afterEach(() => vi.unstubAllGlobals())
 
-it('shows the app name', () => {
-  renderApp(signedOut)
+it('shows the menu with Home and Logout to a signed-in user', () => {
+  vi.stubGlobal('fetch', vi.fn().mockReturnValue(new Promise(() => {})))
 
-  expect(screen.getByRole('heading', { name: 'Frongle' })).toBeInTheDocument()
+  renderApp(signedIn)
+
+  expect(screen.getByRole('link', { name: 'Home' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Logout' })).toBeInTheDocument()
 })
 
-it('shows the Frongle logo beside the app name', () => {
-  renderApp(signedOut)
+it('signs the user out from the menu', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockReturnValue(new Promise(() => {})))
 
-  expect(screen.getByRole('img', { name: 'Frongle logo' })).toHaveAttribute('src', '/logo.svg')
+  renderApp(signedIn)
+  await userEvent.click(screen.getByRole('button', { name: 'Logout' }))
+
+  expect(signedIn.logout).toHaveBeenCalled()
 })
 
-it('styles the sign-in button as a Bootstrap primary button', () => {
+it('shows no menu and no sign-in button while the sign-in redirect happens', () => {
   renderApp(signedOut)
 
-  expect(screen.getByRole('button', { name: 'Sign in' })).toHaveClass('btn', 'btn-primary')
-})
-
-it('asks a signed-out user to sign in', async () => {
-  renderApp(signedOut)
-
-  await userEvent.click(screen.getByRole('button', { name: 'Sign in' }))
-
-  expect(signedOut.login).toHaveBeenCalled()
+  expect(screen.getByRole('status')).toHaveTextContent('Signing you in')
+  expect(screen.queryByRole('navigation')).not.toBeInTheDocument()
+  expect(screen.queryByRole('button')).not.toBeInTheDocument()
 })
 
 it('shows the greeting, tenant, and roles from the API for a signed-in user', async () => {

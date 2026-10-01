@@ -38,7 +38,7 @@ On macOS with Homebrew: `brew install kind kubectl helm node dotnet` and `brew i
 3. Clone the repository and go to its folder.
 4. Run `deploy/local/up.sh`. It creates the kind cluster, installs the ingress controller and the Keycloak operator, builds the API and web images, and installs the Helm chart. The first run takes 10 to 20 minutes because of image downloads.
 5. Wait until all pods are ready: `kubectl -n frongle get pods`. Keycloak is the slowest, and the `frongle-realm` pod shows `Completed` when the realm import is done.
-6. Open http://localhost and select Sign in.
+6. Open http://localhost. The app sends you to the sign-in page.
 7. Sign in as one of the demo users below. The password for all of them is `password`.
 
 | User                  | Role                | Tenant |
@@ -47,7 +47,7 @@ On macOS with Homebrew: `brew install kind kubectl helm node dotnet` and `brew i
 | `team@acme.test`      | work-team           | acme   |
 | `manager@globex.test` | maintenance-manager | globex |
 
-After you sign in, the page shows the greeting from the API with your tenant and roles.
+After you sign in, the page shows the greeting from the API with your tenant and roles. The menu at the top has Home and Logout.
 
 Useful extras:
 
