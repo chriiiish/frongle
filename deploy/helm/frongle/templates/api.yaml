@@ -36,8 +36,10 @@ spec:
               value: "{{ .Values.publicUrl }}/auth/realms/{{ .Values.keycloak.realm }}"
             - name: Authentication__MetadataAddress
               value: "http://{{ include "frongle.keycloakName" . }}-service:8080/auth/realms/{{ .Values.keycloak.realm }}/.well-known/openid-configuration"
+            # The metadata address is the in-cluster http:// service, so the API cannot require HTTPS for it.
+            # The Authority (the token issuer) still uses the public URL.
             - name: Authentication__RequireHttpsMetadata
-              value: {{ hasPrefix "https" .Values.publicUrl | quote }}
+              value: "false"
           readinessProbe:
             httpGet:
               path: /health/ready

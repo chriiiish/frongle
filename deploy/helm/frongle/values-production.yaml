@@ -5,6 +5,14 @@ publicUrl: https://frongle.cjl.nz
 database:
   existingSecret: frongle-db
 
+# Two Keycloak pods and the realm import must fit on two t3.medium nodes.
+keycloak:
+  resources:
+    requests:
+      memory: 900Mi
+    limits:
+      memory: 1700Mi
+
 ingress:
   host: frongle.cjl.nz
   tls:
