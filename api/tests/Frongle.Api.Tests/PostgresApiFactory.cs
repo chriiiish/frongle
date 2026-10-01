@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -17,10 +18,15 @@ public class PostgresApiFactory(PostgresFixture database) : FrongleApiFactory
         base.ConfigureWebHost(builder);
         builder.ConfigureTestServices(services =>
         {
-            services.AddDbContext<ProbeDbContext>((provider, options) => options
-                .UseNpgsql(database.AppConnectionString)
-                .AddInterceptors(provider.GetRequiredService<TenantConnectionInterceptor>()));
+            services.RemoveAll<DbContextOptions<FrongleDbContext>>();
+            services.RemoveAll<IDbContextOptionsConfiguration<FrongleDbContext>>();
+            services.AddDbContext<FrongleDbContext>(UsePostgres);
+            services.AddDbContext<ProbeDbContext>(UsePostgres);
             services.TryAddEnumerable(ServiceDescriptor.Singleton<Microsoft.AspNetCore.Hosting.IStartupFilter, ProbeEndpointsStartupFilter>());
         });
     }
+
+    private void UsePostgres(IServiceProvider provider, DbContextOptionsBuilder options) => options
+        .UseFrongleNpgsql(database.AppConnectionString)
+        .AddInterceptors(provider.GetRequiredService<TenantConnectionInterceptor>());
 }

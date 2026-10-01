@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using Frongle.Api;
+using Frongle.Api.Areas;
 using Frongle.Api.Auth;
 using Frongle.Api.Data;
 using Microsoft.AspNetCore.Authentication;
@@ -13,7 +14,7 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICaller, HttpCaller>();
 builder.Services.AddScoped<TenantConnectionInterceptor>();
 builder.Services.AddDbContext<FrongleDbContext>((provider, options) => options
-    .UseNpgsql(builder.Configuration.GetConnectionString("Frongle"))
+    .UseFrongleNpgsql(builder.Configuration.GetConnectionString("Frongle"))
     .AddInterceptors(provider.GetRequiredService<TenantConnectionInterceptor>()));
 
 builder.Services.AddHealthChecks().AddDbContextCheck<FrongleDbContext>("database", tags: ["ready"]);
@@ -30,6 +31,10 @@ builder.Services
     });
 builder.Services.AddTransient<IClaimsTransformation, KeycloakRolesClaimsTransformation>();
 builder.Services.AddAuthorizationBuilder()
+    .AddPolicy(AreaEndpoints.ManagerPolicy, policy => policy
+        .RequireAuthenticatedUser()
+        .RequireClaim("tenant_id")
+        .RequireRole(Roles.MaintenanceManager))
     .SetFallbackPolicy(new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
         .RequireAuthenticatedUser()
         .RequireClaim("tenant_id")
@@ -127,6 +132,8 @@ app.MapGet("/api/hello", (ClaimsPrincipal user) => new HelloResponse(
     .Produces<HelloResponse>(StatusCodes.Status200OK)
     .Produces(StatusCodes.Status401Unauthorized)
     .Produces(StatusCodes.Status403Forbidden);
+
+app.MapAreaEndpoints();
 
 app.Run();
 

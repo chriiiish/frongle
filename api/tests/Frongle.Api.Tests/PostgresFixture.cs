@@ -25,8 +25,9 @@ public sealed class PostgresFixture : IAsyncLifetime
     {
         await _container.StartAsync();
 
-        var options = new DbContextOptionsBuilder<FrongleDbContext>().UseNpgsql(_container.GetConnectionString()).Options;
-        await using var owner = new FrongleDbContext(options, new NoCaller());
+        var options = new DbContextOptionsBuilder<FrongleDbContext>();
+        options.UseFrongleNpgsql(_container.GetConnectionString());
+        await using var owner = new FrongleDbContext(options.Options, new NoCaller());
         await owner.Database.MigrateAsync();
         await owner.Database.ExecuteSqlRawAsync(ProbeDbContext.CreateTable);
         await owner.Database.ExecuteSqlRawAsync(TenantSecurity.EnableRowLevelSecurity("probe_notes"));

@@ -31,6 +31,9 @@ public class FrongleDbContext : DbContext
         _caller = caller;
     }
 
+    /// <summary>The Areas of the caller's tenant.</summary>
+    public DbSet<Area> Areas => Set<Area>();
+
     /// <summary>Every recorded change, for the caller's tenant only.</summary>
     public DbSet<AuditRecord> AuditRecords => Set<AuditRecord>();
 
@@ -53,6 +56,17 @@ public class FrongleDbContext : DbContext
             audit.Property(a => a.ChangedBy).HasColumnName("changed_by");
             audit.Property(a => a.ChangedByName).HasColumnName("changed_by_name");
             audit.Property(a => a.ChangedAt).HasColumnName("changed_at");
+        });
+
+        modelBuilder.Entity<Area>(area =>
+        {
+            area.ToTable("areas");
+            area.Property(a => a.Id).HasColumnName("id");
+            area.Property(a => a.Code).HasColumnName("code");
+            area.Property(a => a.Name).HasColumnName("name");
+            area.Property(a => a.Boundary).HasColumnName("boundary").HasColumnType("geography(Polygon, 4326)");
+            area.HasIndex(a => new { a.TenantId, a.Code }).IsUnique();
+            area.HasIndex(a => a.Boundary).HasMethod("gist");
         });
 
         foreach (var entityType in modelBuilder.Model.GetEntityTypes().Where(t => typeof(ITenantOwned).IsAssignableFrom(t.ClrType)))
