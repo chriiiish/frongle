@@ -11,6 +11,10 @@ prod="$(helm template frongle "$CHART" -f "$CHART/values-production.yaml" --set 
 grep -A1 'name: Authentication__RequireHttpsMetadata' <<<"$prod" | grep -q 'value: "false"' \
   || fail "the API must not require HTTPS for the in-cluster metadata address"
 
+# The Swagger page signs in with the web app's Keycloak client, so the API needs its ID.
+grep -A1 'name: Authentication__ClientId' <<<"$prod" | grep -q 'value: "frongle-web"' \
+  || fail "the API needs the Keycloak client ID for the Swagger sign-in"
+
 # The default request of 1700Mi per Keycloak pod leaves no room for the realm import on t3.medium nodes.
 grep -q 'memory: 900Mi' <<<"$prod" || fail "production needs a Keycloak memory request of 900Mi"
 echo "ok"

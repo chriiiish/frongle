@@ -1,0 +1,79 @@
+/* Frongle brand for Swagger UI. The colors and fonts match web/src/index.css. */
+@import url('https://fonts.googleapis.com/css2?family=Cabin:wght@400;600&family=Domine&display=swap');
+
+:root {
+  --frongle-red: #ea4e2d;
+  --frongle-red-dark: #d6401f;
+  --frongle-cream: #efe4b4;
+  --frongle-ink: #191919;
+}
+
+body {
+  background: var(--frongle-cream);
+}
+
+.swagger-ui,
+.swagger-ui .opblock .opblock-summary-description,
+.swagger-ui .opblock-description-wrapper p,
+.swagger-ui .info p,
+.swagger-ui table thead tr th,
+.swagger-ui .parameter__name,
+.swagger-ui label,
+.swagger-ui .btn {
+  font-family: Cabin, system-ui, sans-serif;
+  color: var(--frongle-ink);
+}
+
+.swagger-ui .info .title,
+.swagger-ui .opblock-tag,
+.swagger-ui section.models h4,
+.swagger-ui .opblock-section-header h4 {
+  font-family: Domine, serif;
+  font-weight: 400;
+  color: var(--frongle-ink);
+}
+
+/* The top bar shows the Frongle logo in place of the Swagger logo. */
+.swagger-ui .topbar {
+  background: var(--frongle-ink);
+}
+
+.swagger-ui .topbar-wrapper a.link {
+  display: block;
+  width: 2.5rem;
+  height: 2.5rem;
+  background: url('logo.svg') no-repeat center / contain;
+}
+
+.swagger-ui .topbar-wrapper a.link > * {
+  display: none;
+}
+
+/* The brand has one light theme, so there is no dark mode toggle. */
+.swagger-ui .dark-mode-toggle {
+  display: none;
+}
+
+/* Ink text on red keeps the buttons readable, as in the web app. */
+.swagger-ui .btn.authorize,
+.swagger-ui .btn.execute {
+  background: var(--frongle-red);
+  border-color: var(--frongle-red);
+  color: var(--frongle-ink);
+  font-weight: 600;
+}
+
+.swagger-ui .btn.authorize svg {
+  fill: var(--frongle-ink);
+}
+
+.swagger-ui .btn.authorize:hover,
+.swagger-ui .btn.execute:hover {
+  background: var(--frongle-red-dark);
+  border-color: var(--frongle-red-dark);
+}
+
+.swagger-ui .scheme-container {
+  background: var(--frongle-cream);
+  box-shadow: 0 1px 2px 0 rgb(25 25 25 / 15%);
+}
