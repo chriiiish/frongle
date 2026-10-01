@@ -1,0 +1,11 @@
+# Production on EKS. The release workflow adds the image repositories, image tags,
+# database.host, and ingress.tls.email.
+publicUrl: https://frongle.cjl.nz
+
+database:
+  existingSecret: frongle-db
+
+ingress:
+  host: frongle.cjl.nz
+  tls:
+    enabled: true

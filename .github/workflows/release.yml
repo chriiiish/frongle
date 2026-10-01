@@ -1,0 +1,142 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Shares the Terraform group so a release never runs while infrastructure changes.
+concurrency:
+  group: terraform
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-1
+  CLUSTER: frongle
+  INGRESS_NGINX_VERSION: 4.15.1
+  CERT_MANAGER_VERSION: v1.21.2
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v7
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_wrapper: false
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Read the infrastructure outputs
+        working-directory: deploy/terraform
+        run: |
+          terraform init -input=false -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}"
+          {
+            echo "DATABASE_HOST=$(terraform output -raw database_host)"
+            echo "DATABASE_SECRET_ARN=$(terraform output -raw database_secret_arn)"
+            echo "API_REPOSITORY=$(terraform output -json ecr_repository_urls | jq -r .api)"
+            echo "WEB_REPOSITORY=$(terraform output -json ecr_repository_urls | jq -r .web)"
+          } >> "$GITHUB_ENV"
+
+      - uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push the images
+        run: |
+          push_if_missing() {
+            local name="$1" repository="$2"
+            if aws ecr describe-images --repository-name "frongle/$name" --image-ids "imageTag=$GITHUB_SHA" >/dev/null 2>&1; then
+              echo "frongle/$name:$GITHUB_SHA is already in ECR"
+              return
+            fi
+            docker build -t "$repository:$GITHUB_SHA" "$name"
+            docker push "$repository:$GITHUB_SHA"
+          }
+          push_if_missing api "$API_REPOSITORY"
+          push_if_missing web "$WEB_REPOSITORY"
+
+      # The Kubernetes API accepts only the admin addresses. Add this runner for the release and remove it after.
+      - name: Allow this runner to reach the Kubernetes API
+        run: |
+          aws eks describe-cluster --name "$CLUSTER" --query cluster.resourcesVpcConfig.publicAccessCidrs --output json > "$RUNNER_TEMP/admin-cidrs.json"
+          runner_cidr="$(curl -fsS https://checkip.amazonaws.com | tr -d '\n')/32"
+          cidrs="$(jq -r --arg runner "$runner_cidr" '. + [$runner] | unique | join(",")' "$RUNNER_TEMP/admin-cidrs.json")"
+          aws eks update-cluster-config --name "$CLUSTER" --resources-vpc-config "publicAccessCidrs=$cidrs"
+          aws eks wait cluster-active --name "$CLUSTER"
+          aws eks update-kubeconfig --name "$CLUSTER"
+
+      - name: Install ingress-nginx
+        run: |
+          helm upgrade --install ingress-nginx ingress-nginx \
+            --repo https://kubernetes.github.io/ingress-nginx --version "$INGRESS_NGINX_VERSION" \
+            --namespace ingress-nginx --create-namespace \
+            --set-string controller.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-type"=nlb \
+            --wait
+
+      - name: Point the domain at the load balancer
+        run: |
+          host="$(yq .ingress.host deploy/helm/frongle/values-production.yaml)"
+          zone_id="$(aws route53 list-hosted-zones-by-name --dns-name "${host#*.}" --max-items 1 --query 'HostedZones[0].Id' --output text)"
+          load_balancer="$(kubectl -n ingress-nginx get service ingress-nginx-controller -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')"
+          aws route53 change-resource-record-sets --hosted-zone-id "$zone_id" --change-batch "$(jq -n --arg host "$host" --arg target "$load_balancer" \
+            '{Changes: [{Action: "UPSERT", ResourceRecordSet: {Name: $host, Type: "CNAME", TTL: 60, ResourceRecords: [{Value: $target}]}}]}')"
+
+      - name: Install cert-manager
+        run: |
+          helm upgrade --install cert-manager cert-manager \
+            --repo https://charts.jetstack.io --version "$CERT_MANAGER_VERSION" \
+            --namespace cert-manager --create-namespace \
+            --set crds.enabled=true \
+            --wait
+
+      - name: Install the Keycloak operator
+        run: |
+          version="$(cat deploy/keycloak-version)"
+          base="https://raw.githubusercontent.com/keycloak/keycloak-k8s-resources/$version/kubernetes"
+          kubectl create namespace frongle --dry-run=client -o yaml | kubectl apply -f -
+          for crd in keycloaks keycloakrealmimports keycloakoidcclients keycloaksamlclients; do
+            kubectl apply -f "$base/$crd.k8s.keycloak.org-v1.yml"
+          done
+          kubectl -n frongle apply -f "$base/kubernetes.yml"
+
+      - name: Copy the database login into the cluster
+        run: |
+          secret="$(aws secretsmanager get-secret-value --secret-id "$DATABASE_SECRET_ARN" --query SecretString --output text)"
+          kubectl -n frongle create secret generic frongle-db \
+            --from-literal=username="$(jq -r .username <<<"$secret")" \
+            --from-literal=password="$(jq -r .password <<<"$secret")" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Deploy Frongle
+        run: |
+          helm upgrade --install frongle deploy/helm/frongle \
+            --namespace frongle \
+            -f deploy/helm/frongle/values-production.yaml \
+            --set api.image.repository="$API_REPOSITORY" --set api.image.tag="$GITHUB_SHA" \
+            --set web.image.repository="$WEB_REPOSITORY" --set web.image.tag="$GITHUB_SHA" \
+            --set database.host="$DATABASE_HOST" \
+            --set ingress.tls.email="${{ vars.ACME_EMAIL }}" \
+            --wait --timeout 15m
+
+      - name: Check that the site answers over HTTPS
+        run: |
+          host="$(yq .ingress.host deploy/helm/frongle/values-production.yaml)"
+          for path in / /config.json /auth/realms/frongle/.well-known/openid-configuration; do
+            curl -fsS --retry 30 --retry-delay 10 --retry-all-errors -o /dev/null "https://$host$path"
+          done
+          # Without a token the API must answer 401, which shows that the request reached it.
+          test "$(curl -sS -o /dev/null -w '%{http_code}' "https://$host/api/hello")" = 401
+
+      - name: Remove this runner from the Kubernetes API allow list
+        if: always()
+        run: |
+          if [ -s "$RUNNER_TEMP/admin-cidrs.json" ]; then
+            aws eks wait cluster-active --name "$CLUSTER"
+            aws eks update-cluster-config --name "$CLUSTER" --resources-vpc-config "publicAccessCidrs=$(jq -r 'join(",")' "$RUNNER_TEMP/admin-cidrs.json")"
+          fi

@@ -40,4 +40,9 @@ keycloak:
 
 ingress:
   className: nginx
-  host: '' # Empty matches any host.
+  host: '' # Empty matches any host. Required when tls.enabled is true.
+  tls:
+    enabled: false # Needs cert-manager in the cluster.
+    secretName: frongle-tls
+    clusterIssuer: letsencrypt
+    email: '' # Let's Encrypt contact address. Required when tls.enabled is true.
