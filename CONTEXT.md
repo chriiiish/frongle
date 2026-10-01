@@ -41,7 +41,7 @@ The change of an Asset's Friendly Id, which means that someone must fit a new ph
 _Avoid_: Rename, renumber
 
 **Area**:
-A named region of the map, drawn by a Maintenance Manager, with a two-letter code. An Asset belongs to the Area that contains its location.
+A named region of the map, drawn by a Maintenance Manager, with a two-letter code. An Asset belongs to the Area that contains its location. Areas of one tenant never overlap, but they can share an edge and they can leave gaps. A location on a shared edge belongs to the Area with the lower code. A location in a gap belongs to no Area, so no Asset can sit there.
 _Avoid_: Zone, region, district
 
 **Event**:
