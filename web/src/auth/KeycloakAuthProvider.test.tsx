@@ -15,7 +15,12 @@ vi.mock('keycloak-js', () => ({
     constructor() {
       clients.push(this)
     }
-    tokenParsed = { given_name: 'Morgan', family_name: 'Manager', email: 'manager@acme.test' }
+    tokenParsed = {
+      given_name: 'Morgan',
+      family_name: 'Manager',
+      email: 'manager@acme.test',
+      realm_access: { roles: ['maintenance-manager', 'offline_access'] },
+    }
     init = init
     login = login
     updateToken = async () => {
@@ -114,6 +119,27 @@ it('tells the app the name and email that the token carries', async () => {
   )
 
   expect(await screen.findByText('Morgan Manager manager@acme.test')).toBeInTheDocument()
+})
+
+it('tells the app the roles that the token carries', async () => {
+  init.mockResolvedValueOnce(true)
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue({
+      json: async () => ({ keycloakUrl: 'https://kc.test', realm: 'frongle', clientId: 'x' }),
+    }),
+  )
+  function ShowRoles() {
+    return <p>{useAuth().roles.join(' ')}</p>
+  }
+
+  render(
+    <KeycloakAuthProvider>
+      <ShowRoles />
+    </KeycloakAuthProvider>,
+  )
+
+  expect(await screen.findByText('maintenance-manager offline_access')).toBeInTheDocument()
 })
 
 it('gives the app the new token when Keycloak renews it in the background', async () => {

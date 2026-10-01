@@ -10,6 +10,7 @@ const auth: Auth = {
   token: 'jwt',
   accountUrl: ACCOUNT_URL,
   profile: undefined,
+  roles: [],
   logout: vi.fn(),
   refresh: vi.fn(),
   changePassword: vi.fn(),
