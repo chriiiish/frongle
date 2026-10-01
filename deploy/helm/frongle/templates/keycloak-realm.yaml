@@ -8,6 +8,8 @@ spec:
     realm: {{ .Values.keycloak.realm }}
     enabled: true
     sslRequired: external
+    loginTheme: frongle
+    displayName: Frongle
     roles:
       realm:
         - name: maintenance-manager

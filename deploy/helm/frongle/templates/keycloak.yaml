@@ -27,6 +27,24 @@ spec:
     headers: xforwarded
   ingress:
     enabled: false
+  unsupported:
+    podTemplate:
+      spec:
+        containers:
+          - volumeMounts:
+              - name: frongle-theme
+                mountPath: /opt/keycloak/themes/frongle/login
+        volumes:
+          - name: frongle-theme
+            configMap:
+              name: {{ .Release.Name }}-keycloak-theme
+              items:
+                - key: theme.properties
+                  path: theme.properties
+                - key: frongle.css
+                  path: resources/css/frongle.css
+                - key: logo.svg
+                  path: resources/img/logo.svg
   additionalOptions:
     - name: http-relative-path
       value: /auth
