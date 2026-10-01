@@ -41,10 +41,7 @@ builder.Services.AddSwaggerGen(options =>
         BearerFormat = "JWT",
         Description = "A Keycloak access token.",
     });
-    options.AddSecurityRequirement(document => new OpenApiSecurityRequirement
-    {
-        [new OpenApiSecuritySchemeReference("Bearer", document)] = [],
-    });
+    options.OperationFilter<BearerSecurityOperationFilter>();
 });
 
 var app = builder.Build();

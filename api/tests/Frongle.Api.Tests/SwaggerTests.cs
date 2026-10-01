@@ -32,6 +32,25 @@ public class SwaggerTests(FrongleApiFactory factory) : IClassFixture<FrongleApiF
     }
 
     [Fact]
+    public async Task The_openapi_spec_requires_the_bearer_token_on_protected_endpoints()
+    {
+        var spec = await GetOpenApiSpec();
+
+        var security = spec.GetProperty("paths").GetProperty("/api/hello").GetProperty("get").GetProperty("security");
+        Assert.True(security[0].TryGetProperty("Bearer", out _));
+    }
+
+    [Fact]
+    public async Task The_openapi_spec_does_not_ask_for_a_token_on_anonymous_endpoints()
+    {
+        var spec = await GetOpenApiSpec();
+
+        // A document-level requirement would apply to every operation, including this one.
+        Assert.False(spec.TryGetProperty("security", out _));
+        Assert.False(spec.GetProperty("paths").GetProperty("/health").GetProperty("get").TryGetProperty("security", out _));
+    }
+
+    [Fact]
     public async Task The_swagger_page_is_public()
     {
         var response = await factory.CreateClient().GetAsync("/api/swagger/index.html");
