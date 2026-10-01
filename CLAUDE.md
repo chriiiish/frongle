@@ -32,11 +32,13 @@ Two kinds of user:
 
 - TDD: write a failing test first, make it pass with the least code, then refactor. Use the `/tdd` skill for features and bug fixes.
 - YAGNI: add no code, config, dependency, or abstraction that a current test or requirement does not need.
-- Clean code: small functions, names that reveal intent, no dead code, comments only to explain why.
-- Mobile-first: design for a phone screen, then scale up with `min-width` media queries.
+- Clean code: small functions, names that reveal intent, no dead code, `//` comments only to explain why.
+- API documentation: give every type and method in `api/src` a `/// <summary>`, and describe each parameter with `<param>`. State what it is for and what the caller gets, so the comment adds what the name does not.
+- Mobile-first: design for a phone screen, then lay the page out well on desktop too. Build the web with Bootstrap: use its grid, components, and `min-width` breakpoints instead of custom CSS where it can do the job.
 - API dependencies point inward: Api depends on Domain, and Domain depends on nothing. When a feature needs them, add Application and Infrastructure projects. Do not add them before.
 - Domain words: Asset, Maintenance Manager, Work Team, Work Order, Maintenance Schedule. Use them in code and tests.
 - Format before you finish: `npm run format` (web), `dotnet format` (api), `npx prettier --write .` (top level).
 - The API build treats analyzer warnings as errors.
-- Do not commit unless asked.
+- Run `npx prettier --write .` before every commit.
+- When the work calls for it, commit and open pull requests. You do not need to ask first.
 - Write commit messages in Conventional Commits style: `type(scope): summary`. Use the types `feat`, `fix`, `docs`, `test`, `refactor`, `chore`, `build`, and `ci`. Write the summary in the imperative mood, with no full stop.
