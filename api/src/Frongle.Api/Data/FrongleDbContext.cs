@@ -77,6 +77,9 @@ public class FrongleDbContext : DbContext
         return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
     }
 
+    /// <summary>Builds the query filter that keeps only the rows of the caller's tenant.</summary>
+    /// <param name="entityType">A tenant-owned entity type that the filter applies to.</param>
+    /// <returns>A predicate for an EF Core query filter that compares the row's tenant with the caller's tenant.</returns>
     private LambdaExpression BelongsToCurrentTenant(Type entityType)
     {
         var entity = Expression.Parameter(entityType, "e");
@@ -87,6 +90,8 @@ public class FrongleDbContext : DbContext
         return Expression.Lambda(Expression.Equal(tenantOfEntity, tenantOfCaller), entity);
     }
 
+    /// <summary>Stamps the caller's tenant on new rows and adds one audit record for each field that changed, before the save runs.</summary>
+    /// <exception cref="InvalidOperationException">Nobody is signed in with a tenant, so the changes have no owner or author.</exception>
     private void RecordChanges()
     {
         ChangeTracker.DetectChanges();
@@ -106,6 +111,11 @@ public class FrongleDbContext : DbContext
             added.Entity.TenantId = tenantId;
     }
 
+    /// <summary>Lists the audit records for one changed row, with one record for each field whose value differs.</summary>
+    /// <param name="entry">The tenant-owned row that the save adds, changes, or deletes.</param>
+    /// <param name="userId">The id of the user who made the change.</param>
+    /// <param name="changedAt">The time to stamp on every record of this save.</param>
+    /// <returns>Records that hold the old and the new value of each changed field. A new row has no old values, and a deleted row has no new values.</returns>
     private IEnumerable<AuditRecord> AuditRecordsFor(EntityEntry<ITenantOwned> entry, string userId, DateTimeOffset changedAt)
     {
         var operation = entry.State switch
@@ -134,5 +144,8 @@ public class FrongleDbContext : DbContext
             });
     }
 
+    /// <summary>Turns a field value into the text that an audit record stores.</summary>
+    /// <param name="value">The value of a field, or null when the field had no value.</param>
+    /// <returns>The value as culture-independent text, or null when there is no value.</returns>
     private static string? AsText(object? value) => value is null ? null : Convert.ToString(value, CultureInfo.InvariantCulture);
 }

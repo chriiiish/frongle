@@ -32,7 +32,7 @@ builder.Services.AddTransient<IClaimsTransformation, KeycloakRolesClaimsTransfor
 builder.Services.AddAuthorizationBuilder()
     .SetFallbackPolicy(new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
         .RequireAuthenticatedUser()
-        .RequireClaim("tenant_id")
+        .RequireAssertion(context => !string.IsNullOrWhiteSpace(context.User.FindFirstValue("tenant_id")))
         .Build());
 
 builder.Services.AddEndpointsApiExplorer();
@@ -75,8 +75,19 @@ var app = builder.Build();
 
 if (app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
 {
-    using var scope = app.Services.CreateScope();
-    scope.ServiceProvider.GetRequiredService<FrongleDbContext>().Database.Migrate();
+    // Postgres skips row-level security for table owners that can bypass it, so the app connection must not own the tables.
+    // The owner's connection builds the schema, and the app connection stays restricted.
+    if (app.Configuration.GetConnectionString("Migrations") is { } migrationsConnection)
+    {
+        var options = new DbContextOptionsBuilder<FrongleDbContext>().UseNpgsql(migrationsConnection).Options;
+        using var migrationsContext = new FrongleDbContext(options, new NoCaller());
+        migrationsContext.Database.Migrate();
+    }
+    else
+    {
+        using var scope = app.Services.CreateScope();
+        scope.ServiceProvider.GetRequiredService<FrongleDbContext>().Database.Migrate();
+    }
 }
 
 // Under /api because the ingress sends only /api/* to this service. These middlewares run before

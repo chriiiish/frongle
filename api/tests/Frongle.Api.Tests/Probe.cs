@@ -63,6 +63,12 @@ public class ProbeEndpointsStartupFilter : IStartupFilter
                 await db.Notes.OrderBy(n => n.Text).Select(n => n.Text).ToListAsync());
             endpoints.MapGet("/probe/audit", async (ProbeDbContext db) =>
                 await db.AuditRecords.OrderBy(a => a.ChangedAt).ThenBy(a => a.Field).ToListAsync());
+            endpoints.MapDelete("/probe/notes/{id:guid}", async (Guid id, ProbeDbContext db) =>
+            {
+                db.Notes.Remove(await db.Notes.SingleAsync(n => n.Id == id));
+                await db.SaveChangesAsync();
+                return Results.NoContent();
+            });
             endpoints.MapPatch("/probe/notes/{id:guid}", async (Guid id, NoteRequest request, ProbeDbContext db) =>
             {
                 var note = await db.Notes.SingleAsync(n => n.Id == id);
