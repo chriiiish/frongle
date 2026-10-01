@@ -15,8 +15,8 @@ jobs:
       run:
         working-directory: web
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
@@ -33,8 +33,8 @@ jobs:
       run:
         working-directory: api
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
       - run: dotnet format --verify-no-changes
@@ -44,13 +44,13 @@ jobs:
   deploy-config:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
       - run: npx prettier@3 --check "**/*.{md,yml,yaml,json}"
-      - uses: azure/setup-helm@v4
-      - uses: hashicorp/setup-terraform@v3
+      - uses: azure/setup-helm@v5
+      - uses: hashicorp/setup-terraform@v4
       - run: helm lint deploy/helm/frongle -f deploy/helm/frongle/values-local.yaml
       - run: helm lint deploy/helm/frongle --set database.host=example --set database.existingSecret=example
       - run: terraform init -backend=false
@@ -64,13 +64,14 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      pull-requests: read
       security-events: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Trivy, dependencies and configuration
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scanners: vuln,secret,misconfig
@@ -82,40 +83,41 @@ jobs:
           docker build -t frongle/api:ci api
           docker build -t frongle/web:ci web
       - name: Trivy, API image
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: frongle/api:ci
           severity: HIGH,CRITICAL
           exit-code: '1'
           ignore-unfixed: true
       - name: Trivy, web image
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: frongle/web:ci
           severity: HIGH,CRITICAL
           exit-code: '1'
           ignore-unfixed: true
       - name: Gitleaks, secret scan
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   codeql:
     runs-on: ubuntu-latest
     permissions:
+      actions: read
       contents: read
       security-events: write
     strategy:
       matrix:
         language: [csharp, javascript-typescript]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
         if: matrix.language == 'csharp'
         with:
           dotnet-version: 10.0.x
-      - uses: github/codeql-action/init@v3
+      - uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.language == 'csharp' && 'autobuild' || 'none' }}
-      - uses: github/codeql-action/analyze@v3
+      - uses: github/codeql-action/analyze@v4
