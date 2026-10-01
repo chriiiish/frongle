@@ -13,6 +13,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "bootstrap": "^5.3.8",
     "keycloak-js": "^26.2.4",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
