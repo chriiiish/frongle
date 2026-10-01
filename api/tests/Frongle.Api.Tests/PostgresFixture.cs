@@ -15,6 +15,9 @@ public sealed class PostgresFixture : IAsyncLifetime
     private const string AppPassword = "frongle_app";
     private readonly PostgreSqlContainer _container = new PostgreSqlBuilder("imresamu/postgis:17-3.5-bookworm").Build();
 
+    /// <summary>The superuser login, which owns the tables and can create extensions.</summary>
+    public string OwnerConnectionString => _container.GetConnectionString();
+
     public string AppConnectionString => new NpgsqlConnectionStringBuilder(_container.GetConnectionString())
     {
         Username = AppRole,

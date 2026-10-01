@@ -11,11 +11,14 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace Frongle.Api.Tests;
 
 /// <summary>The API on a real PostGIS database, with the probe endpoints and test sign-in.</summary>
-public class PostgresApiFactory(PostgresFixture database) : FrongleApiFactory
+public class PostgresApiFactory(PostgresFixture database, string? connectionString = null, bool migrateOnStartup = false) : FrongleApiFactory
 {
+    private readonly string _connectionString = connectionString ?? database.AppConnectionString;
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        builder.UseSetting("ConnectionStrings:Frongle", database.AppConnectionString);
+        builder.UseSetting("ConnectionStrings:Frongle", _connectionString);
+        builder.UseSetting("Database:MigrateOnStartup", migrateOnStartup.ToString());
         base.ConfigureWebHost(builder);
         builder.ConfigureTestServices(services =>
         {
@@ -30,6 +33,6 @@ public class PostgresApiFactory(PostgresFixture database) : FrongleApiFactory
     }
 
     private void UsePostgres(IServiceProvider provider, DbContextOptionsBuilder options) => options
-        .UseFrongleNpgsql(database.AppConnectionString)
+        .UseFrongleNpgsql(_connectionString)
         .AddInterceptors(provider.GetRequiredService<TenantConnectionInterceptor>());
 }
