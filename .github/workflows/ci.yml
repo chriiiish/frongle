@@ -70,7 +70,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Trivy, dependencies and configuration
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scanners: vuln,secret,misconfig
@@ -82,14 +82,14 @@ jobs:
           docker build -t frongle/api:ci api
           docker build -t frongle/web:ci web
       - name: Trivy, API image
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: frongle/api:ci
           severity: HIGH,CRITICAL
           exit-code: '1'
           ignore-unfixed: true
       - name: Trivy, web image
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: frongle/web:ci
           severity: HIGH,CRITICAL
@@ -103,6 +103,7 @@ jobs:
   codeql:
     runs-on: ubuntu-latest
     permissions:
+      actions: read
       contents: read
       security-events: write
     strategy:
