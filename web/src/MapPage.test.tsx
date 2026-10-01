@@ -27,13 +27,20 @@ vi.mock('react-leaflet', () => ({
   MapContainer: ({
     center,
     zoom,
+    maxBounds,
     children,
   }: {
     center: [number, number]
     zoom: number
+    maxBounds: [number, number][]
     children: ReactNode
   }) => (
-    <div data-testid="map" data-center={center.join(',')} data-zoom={zoom}>
+    <div
+      data-testid="map"
+      data-center={center.join(',')}
+      data-zoom={zoom}
+      data-max-bounds={JSON.stringify(maxBounds)}
+    >
       {children}
     </div>
   ),
@@ -170,6 +177,17 @@ it('uses the full width of the screen instead of the narrow page column', async 
   expect(screen.getByRole('region', { name: 'Map' })).toHaveClass('container-fluid')
 })
 
+it('keeps the map inside the longitudes and latitudes that the API accepts', async () => {
+  stubApi()
+
+  await renderMapPage()
+
+  expect(JSON.parse(screen.getByTestId('map').dataset.maxBounds!)).toEqual([
+    [-90, -180],
+    [90, 180],
+  ])
+})
+
 it('outlines each area and labels it with its code', async () => {
   stubApi()
 
@@ -230,6 +248,80 @@ it('asks the user to zoom in instead of loading assets from far away', async () 
     expect.stringContaining('/api/assets'),
     expect.anything(),
   )
+})
+
+it('says the status of each asset in words, not only in colour', async () => {
+  stubApi({
+    '/api/assets': [
+      pole,
+      { ...pole, id: 'asset-2', friendlyId: 'MN-LP-00002', status: 'PendingInstallation' },
+      { ...pole, id: 'asset-3', friendlyId: 'MN-LP-00003', status: 'Removed' },
+    ],
+  })
+
+  await renderMapPage()
+
+  const assets = await screen.findAllByTestId('asset')
+  expect(assets[0]).toHaveTextContent('MN-LP-00001 In Service')
+  expect(assets[1]).toHaveTextContent('MN-LP-00002 Pending Installation')
+  expect(assets[2]).toHaveTextContent('MN-LP-00003 Removed')
+})
+
+it('clears the problem with the assets when a later request for them works', async () => {
+  let assetsFail = true
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (url.startsWith('/api/areas')) return { ok: true, json: async () => [manukau] }
+      return assetsFail
+        ? { ok: false, status: 500, json: async () => ({}) }
+        : { ok: true, json: async () => [pole] }
+    }),
+  )
+  await renderMapPage()
+  expect(await screen.findByRole('alert')).toHaveTextContent('The API returned status 500.')
+
+  assetsFail = false
+  await act(async () => leaflet.handlers.moveend())
+
+  await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument())
+  expect(await screen.findByTestId('asset')).toBeInTheDocument()
+})
+
+it('keeps the problem with the areas when the assets load', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) =>
+      url.startsWith('/api/areas')
+        ? { ok: false, status: 503, json: async () => ({}) }
+        : { ok: true, json: async () => [pole] },
+    ),
+  )
+
+  await renderMapPage()
+
+  expect(await screen.findByTestId('asset')).toBeInTheDocument()
+  expect(screen.getByRole('alert')).toHaveTextContent('The API returned status 503.')
+})
+
+it('shows the assets of the latest view when an earlier request answers last', async () => {
+  const answers: ((assets: unknown[]) => void)[] = []
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (url.startsWith('/api/areas')) return { ok: true, json: async () => [manukau] }
+      return { ok: true, json: () => new Promise((resolve) => answers.push(resolve)) }
+    }),
+  )
+  await renderMapPage()
+  await waitFor(() => expect(answers).toHaveLength(1))
+  await act(async () => leaflet.handlers.moveend())
+  await waitFor(() => expect(answers).toHaveLength(2))
+
+  await act(async () => answers[1]([{ ...pole, friendlyId: 'MN-LP-00002' }]))
+  await act(async () => answers[0]([pole]))
+
+  expect(screen.getByTestId('asset')).toHaveTextContent('MN-LP-00002')
 })
 
 it('tells the user when the API refuses to answer', async () => {
