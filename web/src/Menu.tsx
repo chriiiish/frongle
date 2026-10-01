@@ -55,9 +55,14 @@ export function Menu({ me, onLogout }: { me: Me | undefined; onLogout: () => voi
                 aria-label="Account"
               >
                 {me && (
-                  <li>
-                    <span className="dropdown-item-text fw-semibold">{me.tenant}</span>
-                  </li>
+                  <>
+                    <li>
+                      <span className="dropdown-item-text fw-semibold">{me.tenant}</span>
+                    </li>
+                    <li>
+                      <hr className="dropdown-divider" />
+                    </li>
+                  </>
                 )}
                 <li>
                   <Link className="dropdown-item" to="/profile" onClick={closeAccount}>
