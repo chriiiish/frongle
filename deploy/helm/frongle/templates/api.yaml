@@ -12,6 +12,7 @@ spec:
       labels:
         app: {{ .Release.Name }}-api
     spec:
+      serviceAccountName: {{ .Release.Name }}-api
       containers:
         - name: api
           image: "{{ .Values.api.image.repository }}:{{ .Values.api.image.tag }}"
@@ -42,6 +43,23 @@ spec:
             # The Authority (the token issuer) still uses the public URL.
             - name: Authentication__RequireHttpsMetadata
               value: "false"
+            - name: Storage__Bucket
+              value: {{ required "storage.bucket is required" .Values.storage.bucket | quote }}
+            - name: Storage__Region
+              value: {{ .Values.storage.region | quote }}
+            {{- if .Values.storage.serviceUrl }}
+            - name: Storage__ServiceUrl
+              value: {{ .Values.storage.serviceUrl | quote }}
+            {{- end }}
+            {{- if .Values.minio.enabled }}
+            - name: Storage__AccessKey
+              value: {{ .Values.minio.accessKey | quote }}
+            - name: Storage__SecretKey
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-minio
+                  key: secretKey
+            {{- end }}
           readinessProbe:
             httpGet:
               path: /health/ready

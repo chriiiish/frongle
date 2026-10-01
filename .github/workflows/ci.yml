@@ -52,10 +52,11 @@ jobs:
       - uses: azure/setup-helm@v5
       - uses: hashicorp/setup-terraform@v4
       - run: helm lint deploy/helm/frongle -f deploy/helm/frongle/values-local.yaml
-      - run: helm lint deploy/helm/frongle --set database.host=example --set database.existingSecret=example
-      - run: helm lint deploy/helm/frongle -f deploy/helm/frongle/values-production.yaml --set database.host=example --set ingress.tls.email=ops@example.com
+      - run: helm lint deploy/helm/frongle --set database.host=example --set database.existingSecret=example --set storage.bucket=example
+      - run: helm lint deploy/helm/frongle -f deploy/helm/frongle/values-production.yaml --set database.host=example --set ingress.tls.email=ops@example.com --set storage.bucket=example
       - run: deploy/helm/frongle/tests/tls.sh
       - run: deploy/helm/frongle/tests/production.sh
+      - run: deploy/helm/frongle/tests/storage.sh
       - run: terraform init -backend=false
         working-directory: deploy/terraform
       - run: terraform validate

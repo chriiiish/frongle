@@ -20,6 +20,14 @@ postgres:
   enabled: true
   password: local-only-password
 
+storage:
+  bucket: frongle-images
+  serviceUrl: http://storage.localhost
+
+minio:
+  enabled: true
+  secretKey: local-only-secret
+
 keycloak:
   instances: 1
   resources:
