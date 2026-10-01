@@ -9,8 +9,12 @@ using Microsoft.OpenApi;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddDbContext<FrongleDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("Frongle")));
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICaller, HttpCaller>();
+builder.Services.AddScoped<TenantConnectionInterceptor>();
+builder.Services.AddDbContext<FrongleDbContext>((provider, options) => options
+    .UseNpgsql(builder.Configuration.GetConnectionString("Frongle"))
+    .AddInterceptors(provider.GetRequiredService<TenantConnectionInterceptor>()));
 
 builder.Services.AddHealthChecks().AddDbContextCheck<FrongleDbContext>("database", tags: ["ready"]);
 

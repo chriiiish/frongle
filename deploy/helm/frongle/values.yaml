@@ -26,7 +26,7 @@ database:
 # In-cluster Postgres for local work. Prod uses RDS instead.
 postgres:
   enabled: false
-  image: postgres:17-alpine
+  image: imresamu/postgis:17-3.5-bookworm
   username: frongle
   password: ''
 

@@ -16,7 +16,7 @@ Two kinds of user:
 ## Commands
 
 - Web: `cd web && npm test`, `npm run lint`, `npm run build`
-- API: `cd api && dotnet test`
+- API: `cd api && dotnet test` (needs Docker: the tests start a PostGIS database with Testcontainers)
 - Deploy: `cd deploy/terraform && terraform validate`, `helm lint deploy/helm/frongle -f deploy/helm/frongle/values-local.yaml`
 - Local cluster: `deploy/local/up.sh` and `deploy/local/down.sh`
 - Security scan: `trivy fs --scanners vuln,secret,misconfig --severity HIGH,CRITICAL .`
