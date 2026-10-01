@@ -25,6 +25,14 @@ export interface Asset {
 
 export type EventType = 'Installed' | 'Checked' | 'Repaired' | 'Maintained' | 'Removed'
 
+/** A photo of an event. The read link is short-lived. */
+export interface EventImage {
+  id: string
+  contentType: string
+  sizeBytes: number
+  readUrl: string
+}
+
 /** One thing that happened to an Asset. */
 export interface AssetEvent {
   id: string
@@ -36,6 +44,7 @@ export interface AssetEvent {
   occurredAt: string
   /** The version to send back when the user corrects the event. */
   version: number
+  images: EventImage[]
 }
 
 /** What the user writes about an event. */
@@ -68,7 +77,7 @@ async function reasonFor(response: Response): Promise<string> {
 async function call<T>(
   token: string | undefined,
   path: string,
-  send?: { method: 'POST' | 'PUT'; body: object },
+  send?: { method: 'POST' | 'PUT' | 'DELETE'; body?: object },
 ): Promise<T> {
   let response: Response
   try {
@@ -76,17 +85,19 @@ async function call<T>(
       path,
       send === undefined
         ? { headers: { Authorization: `Bearer ${token}` } }
-        : {
-            method: send.method,
-            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify(send.body),
-          },
+        : send.body === undefined
+          ? { method: send.method, headers: { Authorization: `Bearer ${token}` } }
+          : {
+              method: send.method,
+              headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify(send.body),
+            },
     )
   } catch (failure) {
     throw new ApiError(`The API could not be reached: ${(failure as Error).message}`)
   }
   if (!response.ok) throw new ApiError(await reasonFor(response))
-  return response.json()
+  return response.status === 204 ? (undefined as T) : response.json()
 }
 
 /** The calls that the web app makes to the Frongle API, signed with the token of the user. */
@@ -97,6 +108,30 @@ export function createApi(token: string | undefined) {
       call<Asset[]>(token, `/api/assets?west=${west}&south=${south}&east=${east}&north=${north}`),
     createArea: (code: string, name: string, boundary: Boundary) =>
       call<Area>(token, '/api/areas', { method: 'POST', body: { code, name, boundary } }),
+    /** Asks the API for a place to put the photo, then sends the photo straight to storage. */
+    attachPhoto: async (assetId: string, eventId: string, photo: File) => {
+      const upload = await call<{ uploadUrl: string; contentType: string }>(
+        token,
+        `/api/assets/${assetId}/events/${eventId}/images`,
+        { method: 'POST', body: { contentType: photo.type, sizeBytes: photo.size } },
+      )
+      let response: Response
+      try {
+        // The link is signed already, so this call must not carry the token.
+        response = await fetch(upload.uploadUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': upload.contentType },
+          body: photo,
+        })
+      } catch (failure) {
+        throw new ApiError(`The storage server could not be reached: ${(failure as Error).message}`)
+      }
+      if (!response.ok) throw new ApiError(`The storage server returned status ${response.status}.`)
+    },
+    removePhoto: (assetId: string, eventId: string, imageId: string) =>
+      call<void>(token, `/api/assets/${assetId}/events/${eventId}/images/${imageId}`, {
+        method: 'DELETE',
+      }),
     getAsset: (id: string) => call<Asset>(token, `/api/assets/${id}`),
     listEvents: (assetId: string) => call<AssetEvent[]>(token, `/api/assets/${assetId}/events`),
     addEvent: (assetId: string, draft: EventDraft) =>
