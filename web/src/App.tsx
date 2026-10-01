@@ -23,7 +23,7 @@ export default function App() {
           <Route
             path="/"
             element={
-              <div className="container py-3">
+              <div className="container-fluid py-3 px-md-4">
                 <Welcome token={token} />
               </div>
             }

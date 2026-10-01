@@ -67,6 +67,19 @@ it('welcomes a signed-in user by the name that the API returns', async () => {
   })
 })
 
+it('gives the welcome page the full screen width and a large heading on desktop', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue({ ok: true, json: async () => ({ name: 'Morgan Manager' }) }),
+  )
+
+  renderApp(signedIn)
+
+  const heading = await screen.findByRole('heading', { name: 'Welcome, Morgan Manager' })
+  expect(heading.closest('.container-fluid')).not.toBeNull()
+  expect(heading).toHaveClass('display-5')
+})
+
 it('does not show the map on the welcome page', () => {
   vi.stubGlobal('fetch', vi.fn().mockReturnValue(new Promise(() => {})))
 

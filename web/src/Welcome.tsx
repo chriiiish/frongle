@@ -23,5 +23,5 @@ export function Welcome({ token }: { token: string | undefined }) {
 
   if (error) return <p role="alert">{error}</p>
   if (!me) return <p>Loading…</p>
-  return <h2>Welcome, {me.name}</h2>
+  return <h2 className="display-5">Welcome, {me.name}</h2>
 }
