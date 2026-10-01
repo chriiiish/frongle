@@ -58,4 +58,35 @@ public class SwaggerTests(FrongleApiFactory factory) : IClassFixture<FrongleApiF
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("text/html", response.Content.Headers.ContentType?.MediaType);
     }
+
+    [Fact]
+    public async Task The_swagger_page_uses_the_frongle_title_and_stylesheet()
+    {
+        var page = await factory.CreateClient().GetStringAsync("/api/swagger/index.html");
+
+        Assert.Contains("<title>Frongle API</title>", page);
+        Assert.Contains("/api/swagger/frongle.css", page);
+    }
+
+    [Fact]
+    public async Task The_frongle_stylesheet_is_public_and_uses_the_brand_colors()
+    {
+        var response = await factory.CreateClient().GetAsync("/api/swagger/frongle.css");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("text/css", response.Content.Headers.ContentType?.MediaType);
+        var css = await response.Content.ReadAsStringAsync();
+        Assert.Contains("#ea4e2d", css);
+        Assert.Contains("#efe4b4", css);
+        Assert.Contains("#191919", css);
+    }
+
+    [Fact]
+    public async Task The_frongle_logo_is_public()
+    {
+        var response = await factory.CreateClient().GetAsync("/api/swagger/logo.svg");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("image/svg+xml", response.Content.Headers.ContentType?.MediaType);
+    }
 }

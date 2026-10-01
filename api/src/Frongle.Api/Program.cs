@@ -55,10 +55,24 @@ if (app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
 // Under /api because the ingress sends only /api/* to this service. These middlewares run before
 // authorization, so the spec and the page are public. They list the endpoints but expose no data.
 app.UseSwagger(options => options.RouteTemplate = "api/swagger/{documentName}/swagger.json");
+app.UseStaticFiles();
 app.UseSwaggerUI(options =>
 {
     options.RoutePrefix = "api/swagger";
+    options.DocumentTitle = "Frongle API";
     options.SwaggerEndpoint("v1/swagger.json", "Frongle API v1");
+    options.HeadContent = """
+        <link rel="stylesheet" href="/api/swagger/frongle.css" />
+        <link rel="icon" href="/api/swagger/logo.svg" type="image/svg+xml" />
+        <script>
+          // The Frongle brand has one light theme, so keep Swagger UI out of its dark mode.
+          new MutationObserver(function () {
+            if (document.documentElement.classList.contains('dark-mode')) {
+              document.documentElement.classList.remove('dark-mode');
+            }
+          }).observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+        </script>
+        """;
 });
 
 app.UseAuthentication();
