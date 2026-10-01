@@ -60,9 +60,10 @@ export type AssetType = 'LightPost' | 'StreetSign' | 'TelephonePole' | 'TrafficL
 export class ApiError extends Error {}
 
 async function reasonFor(response: Response): Promise<string> {
-  const body = await response.json().catch(() => ({}))
+  const body = (await response.json().catch(() => null)) ?? {}
   const messages: string[] = Object.values(body.errors ?? {}).flat() as string[]
-  return body.title ?? (messages.join(' ') || `The API returned status ${response.status}.`)
+  // A validation problem has a generic title and the messages that say what to fix, so the messages come first.
+  return messages.join(' ') || body.title || `The API returned status ${response.status}.`
 }
 
 async function call<T>(
