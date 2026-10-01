@@ -65,7 +65,7 @@ public static partial class AreaEndpoints
         areas.MapPut("/{id:guid}", ChangeArea)
             .RequireAuthorization(ManagerPolicy)
             .WithSummary("Change the name and boundary of an Area")
-            .WithDescription("Maintenance Managers only. The code cannot change. The new boundary must not overlap another Area.")
+            .WithDescription("Maintenance Managers only. The code cannot change. The new boundary must not overlap another Area and must keep every Asset of the Area inside it.")
             .Produces(StatusCodes.Status204NoContent)
             .ProducesValidationProblem()
             .Produces(StatusCodes.Status404NotFound)
@@ -75,9 +75,10 @@ public static partial class AreaEndpoints
         areas.MapDelete("/{id:guid}", DeleteArea)
             .RequireAuthorization(ManagerPolicy)
             .WithSummary("Delete an Area")
-            .WithDescription("Maintenance Managers only.")
+            .WithDescription("Maintenance Managers only. An Area that has Assets cannot be deleted.")
             .Produces(StatusCodes.Status204NoContent)
             .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status409Conflict)
             .Produces(StatusCodes.Status403Forbidden);
 
         return app;
@@ -108,6 +109,9 @@ public static partial class AreaEndpoints
         if (area is null) return Results.NotFound();
         if (await Overlaps(db, boundary, ignoring: id))
             return Results.Conflict(new { title = "The boundary overlaps another Area." });
+        var stranded = await AssetsOutside(db, id, boundary);
+        if (stranded.Count > 0)
+            return Results.Conflict(new { title = $"The new boundary would leave these Assets outside the Area: {string.Join(", ", stranded)}." });
 
         area.Name = change.Name.Trim();
         area.Boundary = boundary;
@@ -119,6 +123,8 @@ public static partial class AreaEndpoints
     {
         var area = await db.Areas.SingleOrDefaultAsync(a => a.Id == id);
         if (area is null) return Results.NotFound();
+        if (await db.Assets.AnyAsync(a => a.AreaId == id))
+            return Results.Conflict(new { title = "The Area has Assets, and their Friendly Ids use its code, so it cannot be deleted." });
 
         db.Areas.Remove(area);
         await db.SaveChangesAsync();
@@ -140,6 +146,15 @@ public static partial class AreaEndpoints
             problems["boundary"] = [problem];
         return problems;
     }
+
+    // Friendly Ids name the Area, so a boundary change must not move an Asset into another Area. Showing the first few is enough to act on.
+    private static Task<List<string>> AssetsOutside(FrongleDbContext db, Guid areaId, Polygon boundary) =>
+        db.Assets
+            .FromSql($"SELECT * FROM assets WHERE area_id = {areaId} AND NOT ST_Covers({boundary}::geography, location)")
+            .OrderBy(a => a.FriendlyId)
+            .Select(a => a.FriendlyId)
+            .Take(20)
+            .ToListAsync();
 
     // Areas that only share an edge are fine. The pattern T******** means that the insides of the two shapes meet.
     private static Task<bool> Overlaps(FrongleDbContext db, Polygon boundary, Guid? ignoring) =>

@@ -1,6 +1,8 @@
 using System.Security.Claims;
+using System.Text.Json.Serialization;
 using Frongle.Api;
 using Frongle.Api.Areas;
+using Frongle.Api.Assets;
 using Frongle.Api.Auth;
 using Frongle.Api.Data;
 using Microsoft.AspNetCore.Authentication;
@@ -10,6 +12,8 @@ using Microsoft.OpenApi;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.ConfigureHttpJsonOptions(options =>
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter(allowIntegerValues: false)));
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICaller, HttpCaller>();
 builder.Services.AddScoped<TenantConnectionInterceptor>();
@@ -134,6 +138,7 @@ app.MapGet("/api/hello", (ClaimsPrincipal user) => new HelloResponse(
     .Produces(StatusCodes.Status403Forbidden);
 
 app.MapAreaEndpoints();
+app.MapAssetEndpoints();
 
 app.Run();
 
