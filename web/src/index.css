@@ -35,12 +35,18 @@ h6 {
   --bs-btn-font-weight: 600;
 }
 
-/* Leaflet draws nothing until its container has a height. */
+/* Leaflet draws nothing until its container has a height. On a phone the map fills the screen below the menu. */
 .map {
-  height: 70vh;
+  height: calc(100dvh - 4.5rem);
+  min-height: 20rem;
 }
 
 @media (min-width: 768px) {
+  .map {
+    height: calc(100dvh - 6rem);
+    border-radius: 0.5rem;
+  }
+
   .container {
     max-width: 40rem;
   }

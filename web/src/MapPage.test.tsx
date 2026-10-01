@@ -44,3 +44,9 @@ it('puts the map in a region that is named Map for screen readers', () => {
 
   expect(screen.getByRole('region', { name: 'Map' })).toContainElement(screen.getByTestId('map'))
 })
+
+it('uses the full width of the screen instead of the narrow page column', () => {
+  render(<MapPage />)
+
+  expect(screen.getByRole('region', { name: 'Map' })).toHaveClass('container-fluid')
+})

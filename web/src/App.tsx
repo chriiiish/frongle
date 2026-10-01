@@ -18,9 +18,16 @@ export default function App() {
   return (
     <>
       <Menu onLogout={logout} />
-      <main className="container py-3">
+      <main>
         <Routes>
-          <Route path="/" element={<Welcome token={token} />} />
+          <Route
+            path="/"
+            element={
+              <div className="container py-3">
+                <Welcome token={token} />
+              </div>
+            }
+          />
           <Route path="/map" element={<MapPage />} />
         </Routes>
       </main>
