@@ -43,6 +43,9 @@ public class FrongleDbContext : DbContext
     /// <summary>The images of the Events of the caller's tenant.</summary>
     public DbSet<EventImage> EventImages => Set<EventImage>();
 
+    /// <summary>The Friendly Ids that Assets of the caller's tenant carried before a retag.</summary>
+    public DbSet<FormerFriendlyId> FormerFriendlyIds => Set<FormerFriendlyId>();
+
     /// <summary>Every recorded change, for the caller's tenant only.</summary>
     public DbSet<AuditRecord> AuditRecords => Set<AuditRecord>();
 
@@ -87,11 +90,25 @@ public class FrongleDbContext : DbContext
             asset.Property(a => a.AreaCode).HasColumnName("area_code");
             asset.Property(a => a.Number).HasColumnName("number");
             asset.Property(a => a.FriendlyId).HasColumnName("friendly_id");
+            asset.Property(a => a.NeedsRetag).HasColumnName("needs_retag");
+            asset.Property(a => a.Version).IsRowVersion();
             asset.Property(a => a.Location).HasColumnName("location").HasColumnType("geography(Point, 4326)");
             asset.HasOne<Area>().WithMany().HasForeignKey(a => a.AreaId).OnDelete(DeleteBehavior.Restrict);
             asset.HasIndex(a => new { a.TenantId, a.FriendlyId }).IsUnique();
             asset.HasIndex(a => new { a.TenantId, a.AreaId, a.Type, a.Number }).IsUnique();
             asset.HasIndex(a => a.Location).HasMethod("gist");
+        });
+
+        modelBuilder.Entity<FormerFriendlyId>(former =>
+        {
+            former.ToTable("former_friendly_ids");
+            former.Property(f => f.Id).HasColumnName("id");
+            former.Property(f => f.AssetId).HasColumnName("asset_id");
+            former.Property(f => f.FriendlyId).HasColumnName("friendly_id");
+            former.Property(f => f.ReplacedAt).HasColumnName("replaced_at");
+            former.HasOne<Asset>().WithMany().HasForeignKey(f => f.AssetId).OnDelete(DeleteBehavior.Restrict);
+            former.HasIndex(f => new { f.TenantId, f.FriendlyId }).IsUnique();
+            former.HasIndex(f => f.AssetId);
         });
 
         modelBuilder.Entity<AssetEvent>(ev =>
