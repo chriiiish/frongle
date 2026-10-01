@@ -38,7 +38,7 @@ builder.Services.AddAuthorizationBuilder()
         .RequireRole(Roles.MaintenanceManager))
     .SetFallbackPolicy(new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
         .RequireAuthenticatedUser()
-        .RequireClaim("tenant_id")
+        .RequireAssertion(context => !string.IsNullOrWhiteSpace(context.User.FindFirstValue("tenant_id")))
         .Build());
 
 builder.Services.AddEndpointsApiExplorer();
@@ -81,15 +81,31 @@ var app = builder.Build();
 
 if (app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
 {
-    using var scope = app.Services.CreateScope();
-    var database = scope.ServiceProvider.GetRequiredService<FrongleDbContext>().Database;
-    database.Migrate();
+    // Postgres skips row-level security for table owners that can bypass it, so the app connection must not own the tables.
+    // The owner's connection builds the schema, and the app connection stays restricted.
+    if (app.Configuration.GetConnectionString("Migrations") is { } migrationsConnection)
+    {
+        var options = new DbContextOptionsBuilder<FrongleDbContext>();
+        options.UseFrongleNpgsql(migrationsConnection);
+        using var migrationsContext = new FrongleDbContext(options.Options, new NoCaller());
+        migrationsContext.Database.Migrate();
+    }
+    else
+    {
+        using var migrationScope = app.Services.CreateScope();
+        migrationScope.ServiceProvider.GetRequiredService<FrongleDbContext>().Database.Migrate();
+    }
 
     // The first connection loaded the Postgres types before the migration created PostGIS, so it knows no geometry type.
-    var connection = (NpgsqlConnection)database.GetDbConnection();
-    connection.Open();
-    connection.ReloadTypes();
-    connection.Close();
+    using var scope = app.Services.CreateScope();
+    var database = scope.ServiceProvider.GetRequiredService<FrongleDbContext>().Database;
+    if (database.IsRelational())
+    {
+        var connection = (NpgsqlConnection)database.GetDbConnection();
+        connection.Open();
+        connection.ReloadTypes();
+        connection.Close();
+    }
 }
 
 // Under /api because the ingress sends only /api/* to this service. These middlewares run before
