@@ -3,7 +3,9 @@ import { createContext, useContext } from 'react'
 export interface Auth {
   authenticated: boolean
   token: string | undefined
+  accountUrl: string | undefined
   logout: () => void
+  refresh: () => Promise<void>
 }
 
 export const AuthContext = createContext<Auth | undefined>(undefined)

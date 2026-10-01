@@ -2,6 +2,7 @@ import { Route, Routes } from 'react-router'
 import { useAuth } from './auth/AuthContext'
 import { MapPage } from './MapPage'
 import { Menu } from './Menu'
+import { ProfilePage } from './ProfilePage'
 import { useMe } from './useMe'
 import { Welcome } from './Welcome'
 
@@ -31,6 +32,7 @@ export default function App() {
             }
           />
           <Route path="/map" element={<MapPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
         </Routes>
       </main>
     </>

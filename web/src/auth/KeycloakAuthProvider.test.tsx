@@ -1,12 +1,19 @@
-import { render, waitFor } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
+import { useAuth } from './AuthContext'
 import { KeycloakAuthProvider } from './KeycloakAuthProvider'
 
 const init = vi.hoisted(() => vi.fn().mockResolvedValue(false))
 
 vi.mock('keycloak-js', () => ({
   default: class {
+    token = 'old-token'
     init = init
+    updateToken = async () => {
+      this.token = 'new-token'
+      return true
+    }
   },
 }))
 
@@ -29,4 +36,52 @@ it('sends a signed-out user straight to the Keycloak login page', async () => {
   await waitFor(() =>
     expect(init).toHaveBeenCalledWith({ onLoad: 'login-required', pkceMethod: 'S256' }),
   )
+})
+
+it('tells the app where the Keycloak account service is', async () => {
+  init.mockResolvedValueOnce(true)
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue({
+      json: async () => ({
+        keycloakUrl: 'https://kc.test/auth/',
+        realm: 'frongle',
+        clientId: 'frongle-web',
+      }),
+    }),
+  )
+  function ShowAccountUrl() {
+    return <p>{useAuth().accountUrl}</p>
+  }
+
+  render(
+    <KeycloakAuthProvider>
+      <ShowAccountUrl />
+    </KeycloakAuthProvider>,
+  )
+
+  expect(await screen.findByText('https://kc.test/auth/realms/frongle/account')).toBeInTheDocument()
+})
+
+it('gives the app a fresh token when it asks for a refresh', async () => {
+  init.mockResolvedValueOnce(true)
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue({
+      json: async () => ({ keycloakUrl: 'https://kc.test', realm: 'frongle', clientId: 'x' }),
+    }),
+  )
+  function RefreshButton() {
+    const { token, refresh } = useAuth()
+    return <button onClick={() => void refresh()}>{token}</button>
+  }
+
+  render(
+    <KeycloakAuthProvider>
+      <RefreshButton />
+    </KeycloakAuthProvider>,
+  )
+  await userEvent.click(await screen.findByRole('button', { name: 'old-token' }))
+
+  expect(await screen.findByRole('button', { name: 'new-token' })).toBeInTheDocument()
 })
