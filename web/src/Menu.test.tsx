@@ -146,3 +146,12 @@ it('closes the account dropdown after the user picks an option', async () => {
 
   expect(accountToggle()).toHaveAttribute('aria-expanded', 'false')
 })
+
+it('spaces the menu items apart and centers them on desktop', () => {
+  renderMenu()
+
+  expect(screen.getByRole('link', { name: 'Home' }).closest('ul')).toHaveClass(
+    'align-items-md-center',
+    'gap-md-2',
+  )
+})
