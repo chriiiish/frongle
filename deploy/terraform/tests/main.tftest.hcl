@@ -65,3 +65,13 @@ run "the_cluster_runs_a_version_in_standard_support" {
     error_message = "EKS 1.33 and older are in extended support, which costs more. Use 1.34 or newer."
   }
 }
+
+# The EKS module does not install these. Without them the nodes boot but never become Ready.
+run "the_cluster_has_the_add_ons_that_nodes_need" {
+  command = plan
+
+  assert {
+    condition     = alltrue([for name in ["vpc-cni", "kube-proxy", "coredns"] : contains(keys(module.eks.cluster_addons), name)])
+    error_message = "The cluster needs the vpc-cni, kube-proxy, and coredns add-ons."
+  }
+}
