@@ -55,6 +55,7 @@ public class TestAuthHandler(
     public const string RolesHeader = "X-Test-Roles";
     public const string SubjectHeader = "X-Test-Subject";
     public const string NameHeader = "X-Test-Name";
+    public const string UsernameHeader = "X-Test-Username";
 
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
@@ -63,10 +64,12 @@ public class TestAuthHandler(
 
         var subject = Request.Headers.TryGetValue(SubjectHeader, out var sub) ? sub.ToString() : "test-user";
         var claims = new List<Claim> { new(ClaimTypes.NameIdentifier, subject) };
-        if (Request.Headers.TryGetValue(NameHeader, out var name))
-            claims.Add(new Claim("name", name.ToString()));
         if (Request.Headers.TryGetValue(TenantHeader, out var tenant))
             claims.Add(new Claim("tenant_id", tenant.ToString()));
+        if (Request.Headers.TryGetValue(NameHeader, out var name))
+            claims.Add(new Claim("name", name.ToString()));
+        if (Request.Headers.TryGetValue(UsernameHeader, out var username))
+            claims.Add(new Claim("preferred_username", username.ToString()));
         foreach (var role in roles.ToString().Split(',', StringSplitOptions.RemoveEmptyEntries))
             claims.Add(new Claim(ClaimTypes.Role, role));
 
