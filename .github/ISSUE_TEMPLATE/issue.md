@@ -1,6 +1,6 @@
 ---
 name: Issue
-about: Report a bug or request a change
+about: Report a bug
 title: ''
 labels: ''
 assignees: ''
@@ -27,4 +27,4 @@ Leave this out for a feature request.
 
 ## Notes
 
-Add screenshots, logs, or the environment (local or prod).
+Add screenshots, logs, etc.
