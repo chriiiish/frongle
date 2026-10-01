@@ -7,8 +7,24 @@ import { AuthContext, type Auth } from './auth/AuthContext'
 
 vi.mock('./MapPage', () => ({ MapPage: () => <section aria-label="Map" /> }))
 
-const signedOut: Auth = { authenticated: false, token: undefined, logout: vi.fn() }
-const signedIn: Auth = { authenticated: true, token: 'jwt', logout: vi.fn() }
+const signedOut: Auth = {
+  authenticated: false,
+  token: undefined,
+  accountUrl: undefined,
+  profile: undefined,
+  logout: vi.fn(),
+  refresh: vi.fn(),
+  changePassword: vi.fn(),
+}
+const signedIn: Auth = {
+  authenticated: true,
+  token: 'jwt',
+  accountUrl: 'https://kc.test/account',
+  profile: undefined,
+  logout: vi.fn(),
+  refresh: vi.fn(),
+  changePassword: vi.fn(),
+}
 
 function renderApp(auth: Auth, path = '/') {
   render(
@@ -95,6 +111,20 @@ it('shows the user name in the menu bar', async () => {
   renderApp(signedIn, '/map')
 
   expect(await screen.findByRole('button', { name: 'Morgan Manager' })).toBeInTheDocument()
+})
+
+it('shows the profile page at /profile to a signed-in user', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ name: 'Morgan Manager', tenant: 'acme', firstName: 'Morgan' }),
+    }),
+  )
+
+  renderApp(signedIn, '/profile')
+
+  expect(await screen.findByRole('heading', { name: 'Profile' })).toBeInTheDocument()
 })
 
 it('does not show the map on the welcome page', () => {

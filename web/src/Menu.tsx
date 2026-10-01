@@ -70,11 +70,6 @@ export function Menu({ me, onLogout }: { me: Me | undefined; onLogout: () => voi
                   </Link>
                 </li>
                 <li>
-                  <Link className="dropdown-item" to="/tenant-settings" onClick={closeAccount}>
-                    Tenant Settings
-                  </Link>
-                </li>
-                <li>
                   <hr className="dropdown-divider" />
                 </li>
                 <li>
