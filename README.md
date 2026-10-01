@@ -1,4 +1,8 @@
-# Frongle
+<p align="center">
+  <img src="web/public/logo.svg" alt="Frongle logo" width="96" height="96" />
+</p>
+
+<h1 align="center">Frongle</h1>
 
 Frongle tracks assets such as light-posts, street signs, telephone poles, and traffic lights. It also tracks the maintenance and replacement of those assets.
 
