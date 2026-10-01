@@ -10,8 +10,10 @@ const TILE_CREDIT =
 /** The map page: a street map that opens on Auckland, New Zealand. */
 export function MapPage() {
   return (
-    <MapContainer className="map" center={AUCKLAND} zoom={START_ZOOM}>
-      <TileLayer url={TILE_URL} attribution={TILE_CREDIT} />
-    </MapContainer>
+    <section aria-label="Map">
+      <MapContainer className="map" center={AUCKLAND} zoom={START_ZOOM}>
+        <TileLayer url={TILE_URL} attribution={TILE_CREDIT} />
+      </MapContainer>
+    </section>
   )
 }

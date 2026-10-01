@@ -18,7 +18,7 @@ export function Welcome({ token }: { token: string | undefined }) {
       }
       setMe(await response.json())
     }
-    void load()
+    load().catch((failure: Error) => setError(`The API could not be reached: ${failure.message}`))
   }, [token])
 
   if (error) return <p role="alert">{error}</p>

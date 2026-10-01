@@ -67,3 +67,13 @@ it('keeps the menu collapsed on a phone until the toggle is pressed', async () =
   expect(toggle).toHaveAttribute('aria-expanded', 'true')
   expect(links).toHaveClass('show')
 })
+
+it('closes the menu on a phone after the user picks a link', async () => {
+  renderMenu()
+  const toggle = screen.getByRole('button', { name: 'Toggle navigation' })
+  await userEvent.click(toggle)
+
+  await userEvent.click(screen.getByRole('link', { name: 'Map' }))
+
+  expect(toggle).toHaveAttribute('aria-expanded', 'false')
+})

@@ -5,7 +5,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import App from './App'
 import { AuthContext, type Auth } from './auth/AuthContext'
 
-vi.mock('./MapPage', () => ({ MapPage: () => <div role="application" aria-label="Map" /> }))
+vi.mock('./MapPage', () => ({ MapPage: () => <section aria-label="Map" /> }))
 
 const signedOut: Auth = { authenticated: false, token: undefined, logout: vi.fn() }
 const signedIn: Auth = { authenticated: true, token: 'jwt', logout: vi.fn() }
@@ -46,7 +46,7 @@ it('shows no menu and no map while the sign-in redirect happens', () => {
 
   expect(screen.getByRole('status')).toHaveTextContent('Signing you in')
   expect(screen.queryByRole('navigation')).not.toBeInTheDocument()
-  expect(screen.queryByRole('application', { name: 'Map' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('region', { name: 'Map' })).not.toBeInTheDocument()
   expect(screen.queryByRole('button')).not.toBeInTheDocument()
 })
 
@@ -72,7 +72,7 @@ it('does not show the map on the welcome page', () => {
 
   renderApp(signedIn, '/')
 
-  expect(screen.queryByRole('application', { name: 'Map' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('region', { name: 'Map' })).not.toBeInTheDocument()
 })
 
 it('shows an error when the API call fails', async () => {
@@ -83,12 +83,20 @@ it('shows an error when the API call fails', async () => {
   expect(await screen.findByRole('alert')).toHaveTextContent('403')
 })
 
+it('shows an error when the API cannot be reached', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')))
+
+  renderApp(signedIn)
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('Failed to fetch')
+})
+
 it('shows the map on the map page to a signed-in user without calling the API', () => {
   const fetchMock = vi.fn()
   vi.stubGlobal('fetch', fetchMock)
 
   renderApp(signedIn, '/map')
 
-  expect(screen.getByRole('application', { name: 'Map' })).toBeInTheDocument()
+  expect(screen.getByRole('region', { name: 'Map' })).toBeInTheDocument()
   expect(fetchMock).not.toHaveBeenCalled()
 })
