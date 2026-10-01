@@ -5,6 +5,7 @@ import { useAuth } from './AuthContext'
 import { KeycloakAuthProvider } from './KeycloakAuthProvider'
 
 const init = vi.hoisted(() => vi.fn().mockResolvedValue(false))
+const login = vi.hoisted(() => vi.fn())
 const clients = vi.hoisted(() => [] as { token: string; onAuthRefreshSuccess?: () => void }[])
 
 vi.mock('keycloak-js', () => ({
@@ -16,6 +17,7 @@ vi.mock('keycloak-js', () => ({
     }
     tokenParsed = { given_name: 'Morgan', family_name: 'Manager', email: 'manager@acme.test' }
     init = init
+    login = login
     updateToken = async () => {
       this.token = 'new-token'
       return true
@@ -137,4 +139,26 @@ it('gives the app the new token when Keycloak renews it in the background', asyn
   act(() => client.onAuthRefreshSuccess?.())
 
   expect(await screen.findByText('renewed-token')).toBeInTheDocument()
+})
+
+it('sends the user to the Keycloak page that changes the password', async () => {
+  init.mockResolvedValueOnce(true)
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue({
+      json: async () => ({ keycloakUrl: 'https://kc.test', realm: 'frongle', clientId: 'x' }),
+    }),
+  )
+  function ChangePasswordButton() {
+    return <button onClick={useAuth().changePassword}>Change it</button>
+  }
+  render(
+    <KeycloakAuthProvider>
+      <ChangePasswordButton />
+    </KeycloakAuthProvider>,
+  )
+
+  await userEvent.click(await screen.findByRole('button', { name: 'Change it' }))
+
+  expect(login).toHaveBeenCalledWith({ action: 'UPDATE_PASSWORD' })
 })

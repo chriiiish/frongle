@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { postToKeycloak } from './accountApi'
 import { useAuth } from './auth/AuthContext'
 import { Field } from './Field'
-import { PasswordForm } from './PasswordForm'
+import { PasswordCard } from './PasswordCard'
 
 interface Details {
   firstName: string
@@ -97,7 +97,7 @@ export function ProfilePage() {
           </form>
         </section>
         <section className="col-lg-6">
-          <PasswordForm />
+          <PasswordCard />
         </section>
       </div>
     </div>

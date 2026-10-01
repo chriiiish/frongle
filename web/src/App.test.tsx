@@ -14,6 +14,7 @@ const signedOut: Auth = {
   profile: undefined,
   logout: vi.fn(),
   refresh: vi.fn(),
+  changePassword: vi.fn(),
 }
 const signedIn: Auth = {
   authenticated: true,
@@ -22,6 +23,7 @@ const signedIn: Auth = {
   profile: undefined,
   logout: vi.fn(),
   refresh: vi.fn(),
+  changePassword: vi.fn(),
 }
 
 function renderApp(auth: Auth, path = '/') {

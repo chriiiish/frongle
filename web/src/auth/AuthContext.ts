@@ -14,6 +14,7 @@ export interface Auth {
   profile: Profile | undefined
   logout: () => void
   refresh: () => Promise<void>
+  changePassword: () => void
 }
 
 export const AuthContext = createContext<Auth | undefined>(undefined)

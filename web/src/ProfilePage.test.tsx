@@ -12,6 +12,7 @@ const auth: Auth = {
   profile: undefined,
   logout: vi.fn(),
   refresh: vi.fn(),
+  changePassword: vi.fn(),
 }
 // Keycloak also returns fields that the user must not change, such as the tenant.
 const morgan = {
@@ -95,46 +96,21 @@ it('shows the message from Keycloak when it rejects the details', async () => {
   expect(auth.refresh).not.toHaveBeenCalled()
 })
 
-async function fillPasswordForm(confirmation: string) {
-  await userEvent.type(await screen.findByLabelText('Current password'), 'password')
-  await userEvent.type(screen.getByLabelText('New password'), 'a-better-secret')
-  await userEvent.type(screen.getByLabelText('Confirm new password'), confirmation)
-  await userEvent.click(screen.getByRole('button', { name: 'Change password' }))
-}
-
-it('changes the password in Keycloak and clears the password fields', async () => {
-  const fetchMock = stubKeycloak()
+it('sends the user to Keycloak to change the password', async () => {
+  stubKeycloak()
   renderProfilePage()
 
-  await fillPasswordForm('a-better-secret')
+  await userEvent.click(await screen.findByRole('button', { name: 'Change password' }))
 
-  expect(await screen.findByRole('status')).toHaveTextContent('Your password is changed.')
-  expect(fetchMock).toHaveBeenCalledWith(`${ACCOUNT_URL}/credentials/password`, {
-    method: 'POST',
-    headers: { Authorization: 'Bearer jwt', 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      currentPassword: 'password',
-      newPassword: 'a-better-secret',
-      confirmation: 'a-better-secret',
-    }),
-  })
-  expect(screen.getByLabelText('Current password')).toHaveValue('')
-  expect(screen.getByLabelText('New password')).toHaveValue('')
-  expect(screen.getByLabelText('Confirm new password')).toHaveValue('')
+  expect(auth.changePassword).toHaveBeenCalledOnce()
 })
 
-it('shows the message from Keycloak when it refuses the new password', async () => {
-  stubKeycloak({
-    ok: false,
-    status: 400,
-    json: async () => ({ errors: [{ errorMessage: 'Invalid password: minimum length 8.' }] }),
-  })
+it('does not ask for passwords on the page', async () => {
+  stubKeycloak()
   renderProfilePage()
+  await screen.findByLabelText('Email')
 
-  await fillPasswordForm('a-better-secret')
-
-  expect(await screen.findByRole('alert')).toHaveTextContent('Invalid password: minimum length 8.')
-  expect(screen.queryByText('Your password is changed.')).not.toBeInTheDocument()
+  expect(screen.queryByLabelText(/password/i)).not.toBeInTheDocument()
 })
 
 it('stacks the two forms on a phone and puts them side by side on desktop', async () => {
@@ -142,7 +118,7 @@ it('stacks the two forms on a phone and puts them side by side on desktop', asyn
   renderProfilePage()
 
   const details = await screen.findByRole('form', { name: 'Details' })
-  const password = screen.getByRole('form', { name: 'Password' })
+  const password = screen.getByRole('button', { name: 'Change password' })
 
   expect(details.closest('section')).toHaveClass('col-lg-6')
   expect(password.closest('section')).toHaveClass('col-lg-6')
@@ -160,13 +136,6 @@ it('starts with the details from the token and says so when Keycloak does not an
   expect(screen.getByLabelText('Last name')).toHaveValue('Token')
   expect(screen.getByLabelText('Email')).toHaveValue('tess@acme.test')
   expect(await screen.findByRole('alert')).toHaveTextContent('Failed to fetch')
-})
-
-it('asks the browser not to fill in the current password', async () => {
-  stubKeycloak()
-  renderProfilePage()
-
-  expect(await screen.findByLabelText('Current password')).toHaveAttribute('autocomplete', 'off')
 })
 
 it('keeps the token details and shows an error when Keycloak refuses to share the details', async () => {

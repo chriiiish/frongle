@@ -61,6 +61,8 @@ export function KeycloakAuthProvider({ children }: { children: ReactNode }) {
       accountUrl,
       profile,
       logout: () => void keycloak?.logout(),
+      // Keycloak has no account call that changes a password, so its own page does it and then returns here.
+      changePassword: () => void keycloak?.login({ action: 'UPDATE_PASSWORD' }),
       // Forcing a refresh makes Keycloak issue a token that carries the latest name.
       refresh: async () => {
         await keycloak?.updateToken(-1)
