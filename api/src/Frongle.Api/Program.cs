@@ -139,6 +139,7 @@ app.MapGet("/api/hello", (ClaimsPrincipal user) => new HelloResponse(
 
 app.MapAreaEndpoints();
 app.MapAssetEndpoints();
+app.MapEventEndpoints();
 
 app.Run();
 
