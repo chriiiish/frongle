@@ -27,11 +27,19 @@ module "eks" {
   version = "~> 21.0"
 
   name               = var.name
-  kubernetes_version = "1.33"
+  kubernetes_version = "1.34"
   vpc_id             = module.vpc.vpc_id
   subnet_ids         = module.vpc.private_subnets
 
-  tags = { area = "compute" }
+  # Provider default_tags do not reach the node instances, so set project here too.
+  tags = { project = "frongle", area = "compute" }
+
+  # The module does not install the add-ons that nodes need. The network plugin must exist before the nodes.
+  addons = {
+    vpc-cni    = { before_compute = true }
+    kube-proxy = {}
+    coredns    = {}
+  }
 
   endpoint_public_access                   = true
   endpoint_public_access_cidrs             = var.admin_cidrs
