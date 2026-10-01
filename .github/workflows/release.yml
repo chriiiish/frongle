@@ -67,8 +67,7 @@ jobs:
           aws eks describe-cluster --name "$CLUSTER" --query cluster.resourcesVpcConfig.publicAccessCidrs --output json > "$RUNNER_TEMP/admin-cidrs.json"
           runner_cidr="$(curl -fsS https://checkip.amazonaws.com | tr -d '\n')/32"
           cidrs="$(jq -r --arg runner "$runner_cidr" '. + [$runner] | unique | join(",")' "$RUNNER_TEMP/admin-cidrs.json")"
-          aws eks update-cluster-config --name "$CLUSTER" --resources-vpc-config "publicAccessCidrs=$cidrs"
-          aws eks wait cluster-active --name "$CLUSTER"
+          deploy/release/set-api-access.sh "$CLUSTER" "$cidrs"
           aws eks update-kubeconfig --name "$CLUSTER"
 
       - name: Install ingress-nginx
@@ -137,6 +136,5 @@ jobs:
         if: always()
         run: |
           if [ -s "$RUNNER_TEMP/admin-cidrs.json" ]; then
-            aws eks wait cluster-active --name "$CLUSTER"
-            aws eks update-cluster-config --name "$CLUSTER" --resources-vpc-config "publicAccessCidrs=$(jq -r 'join(",")' "$RUNNER_TEMP/admin-cidrs.json")"
+            deploy/release/set-api-access.sh "$CLUSTER" "$(jq -r 'join(",")' "$RUNNER_TEMP/admin-cidrs.json")"
           fi
