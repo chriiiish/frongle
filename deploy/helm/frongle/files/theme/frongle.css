@@ -1,0 +1,46 @@
+@import url('https://fonts.googleapis.com/css2?family=Cabin:wght@400;600&family=Domine&display=swap');
+
+:root {
+  --frongle-red: #ea4e2d;
+  --frongle-cream: #efe4b4;
+  --frongle-ink: #191919;
+}
+
+.pf-v5-c-login {
+  background: var(--frongle-cream);
+  font-family: Cabin, system-ui, sans-serif;
+  color: var(--frongle-ink);
+}
+
+.pf-v5-c-login__main,
+.pf-v5-c-login__main-body {
+  background: #fff;
+  color: var(--frongle-ink);
+}
+
+.pf-v5-c-login__main-header {
+  border-bottom: 2px solid var(--frongle-red);
+}
+
+#kc-page-title,
+#kc-header-wrapper {
+  font-family: Domine, serif;
+  font-weight: 400;
+  color: var(--frongle-ink);
+}
+
+#kc-header-wrapper {
+  background: url('../img/logo.svg') no-repeat center top / 3rem;
+  padding-top: 4rem;
+  text-align: center;
+}
+
+.pf-v5-c-button.pf-m-primary {
+  background: var(--frongle-red);
+  color: var(--frongle-ink);
+  font-weight: 600;
+}
+
+a {
+  color: var(--frongle-ink);
+}

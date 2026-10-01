@@ -34,4 +34,8 @@ helm upgrade --install frongle "$ROOT/deploy/helm/frongle" \
   --namespace "$NAMESPACE" \
   -f "$ROOT/deploy/helm/frongle/values-local.yaml"
 
+# The image tag stays "local", so Kubernetes does not see the new images. Restart the pods to use them.
+kubectl -n "$NAMESPACE" rollout restart deployment/frongle-api deployment/frongle-web
+kubectl -n "$NAMESPACE" rollout status deployment/frongle-web --timeout=120s
+
 echo "Open http://localhost (sign in as manager@acme.test with password 'password')."

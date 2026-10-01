@@ -1,0 +1,12 @@
+# The "frongle" login theme. The Keycloak pod mounts these files under themes/frongle/login.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-keycloak-theme
+data:
+  theme.properties: |-
+    {{- .Files.Get "files/theme/theme.properties" | nindent 4 }}
+  frongle.css: |-
+    {{- .Files.Get "files/theme/frongle.css" | nindent 4 }}
+  logo.svg: |-
+    {{- .Files.Get "files/theme/logo.svg" | nindent 4 }}
