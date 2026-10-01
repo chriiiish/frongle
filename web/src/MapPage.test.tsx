@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -40,8 +40,19 @@ vi.mock('react-leaflet', () => ({
   TileLayer: ({ url, attribution }: { url: string; attribution: string }) => (
     <div data-testid="tiles" data-url={url} data-attribution={attribution} />
   ),
-  Polygon: ({ positions, children }: { positions: [number, number][][]; children: ReactNode }) => (
-    <div data-testid="area" data-positions={JSON.stringify(positions)}>
+  Polygon: ({
+    positions,
+    pathOptions,
+    children,
+  }: {
+    positions: [number, number][][] | [number, number][]
+    pathOptions: { dashArray?: string }
+    children: ReactNode
+  }) => (
+    <div
+      data-testid={pathOptions.dashArray ? 'outline' : 'area'}
+      data-positions={JSON.stringify(positions)}
+    >
       {children}
     </div>
   ),
@@ -52,12 +63,12 @@ vi.mock('react-leaflet', () => ({
     children,
   }: {
     center: [number, number]
-    pathOptions: { color: string }
+    pathOptions: { color: string; className?: string }
     eventHandlers?: { click: () => void }
     children: ReactNode
   }) => (
     <div
-      data-testid="asset"
+      data-testid={pathOptions.className === 'corner' ? 'corner' : 'asset'}
       data-center={center.join(',')}
       data-color={pathOptions.color}
       onClick={eventHandlers?.click}
@@ -125,10 +136,10 @@ function stubApi(overrides: Record<string, unknown> = {}) {
   return fetchMock
 }
 
-async function renderMapPage() {
+async function renderMapPage(roles = auth.roles) {
   await act(async () => {
     render(
-      <AuthContext.Provider value={auth}>
+      <AuthContext.Provider value={{ ...auth, roles }}>
         <MapPage />
       </AuthContext.Provider>,
     )
@@ -316,4 +327,88 @@ it('closes the history of an asset on request', async () => {
   await userEvent.click(screen.getByRole('button', { name: 'Close' }))
 
   expect(screen.queryByRole('heading', { name: 'MN-LP-00001' })).not.toBeInTheDocument()
+})
+
+const MANAGER = ['maintenance-manager']
+const click = (lat: number, lng: number) =>
+  act(async () => leaflet.handlers.click({ latlng: { lat, lng } }))
+
+it('offers the draw tool to a Maintenance Manager and to nobody else', async () => {
+  stubApi()
+  await renderMapPage()
+  expect(screen.queryByRole('button', { name: 'Draw Area' })).not.toBeInTheDocument()
+  cleanup()
+
+  await renderMapPage(MANAGER)
+
+  expect(screen.getByRole('button', { name: 'Draw Area' })).toBeInTheDocument()
+})
+
+it('marks each corner of an area that the manager draws, instead of adding an asset', async () => {
+  stubApi()
+  await renderMapPage(MANAGER)
+
+  await userEvent.click(screen.getByRole('button', { name: 'Draw Area' }))
+  await click(-37.05, 174.85)
+  await click(-37.05, 174.86)
+
+  expect(screen.getByText('Click the map to mark each corner of the Area.')).toBeInTheDocument()
+  expect(screen.getAllByTestId('corner')).toHaveLength(2)
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Finish' })).toBeDisabled()
+})
+
+it('takes back the last corner and stops drawing on request', async () => {
+  stubApi()
+  await renderMapPage(MANAGER)
+  await userEvent.click(screen.getByRole('button', { name: 'Draw Area' }))
+  await click(-37.05, 174.85)
+  await click(-37.05, 174.86)
+
+  await userEvent.click(screen.getByRole('button', { name: 'Undo' }))
+  expect(screen.getAllByTestId('corner')).toHaveLength(1)
+
+  await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+  expect(screen.queryByTestId('corner')).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Draw Area' })).toBeInTheDocument()
+})
+
+it('outlines the area while the manager draws it', async () => {
+  stubApi()
+  await renderMapPage(MANAGER)
+  await userEvent.click(screen.getByRole('button', { name: 'Draw Area' }))
+  await click(-37.05, 174.85)
+  await click(-37.05, 174.86)
+  await click(-37.04, 174.86)
+
+  expect(JSON.parse(screen.getByTestId('outline').dataset.positions!)).toEqual([
+    [-37.05, 174.85],
+    [-37.05, 174.86],
+    [-37.04, 174.86],
+  ])
+})
+
+it('names the area after the manager finishes drawing and shows it on the map when it is saved', async () => {
+  const saved = { id: 'area-2', code: 'OT', name: 'Otara', boundary: manukau.boundary }
+  const fetchMock = stubApi({ '/api/areas': [] })
+  fetchMock.mockImplementation(async (_url: string, init?: RequestInit) => ({
+    ok: true,
+    status: init?.method === 'POST' ? 201 : 200,
+    json: async () => (init?.method === 'POST' ? saved : []),
+  }))
+  await renderMapPage(MANAGER)
+  await userEvent.click(screen.getByRole('button', { name: 'Draw Area' }))
+  await click(-37.05, 174.85)
+  await click(-37.05, 174.86)
+  await click(-37.04, 174.86)
+
+  await userEvent.click(screen.getByRole('button', { name: 'Finish' }))
+  await userEvent.type(screen.getByLabelText('Code'), 'ot')
+  await userEvent.type(screen.getByLabelText('Name'), 'Otara')
+  await userEvent.click(screen.getByRole('button', { name: 'Add Area' }))
+
+  expect(await screen.findByTestId('area')).toHaveTextContent('OT')
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  expect(screen.queryByTestId('outline')).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Draw Area' })).toBeInTheDocument()
 })

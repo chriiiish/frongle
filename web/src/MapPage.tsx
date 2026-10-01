@@ -11,7 +11,9 @@ import {
 } from 'react-leaflet'
 import { type Area, type Asset, type AssetStatus, type Bounds } from './api'
 import { AssetPanel } from './AssetPanel'
+import { NewAreaDialog } from './NewAreaDialog'
 import { NewAssetDialog, type Place } from './NewAssetDialog'
+import { useAuth } from './auth/AuthContext'
 import { useApi } from './useApi'
 
 const AUCKLAND: [number, number] = [-36.8485, 174.7633]
@@ -22,6 +24,9 @@ const MOVE_DELAY_MS = 250
 const TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
 const TILE_CREDIT =
   '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+
+const MANAGER_ROLE = 'maintenance-manager'
+const MIN_CORNERS = 3
 
 const STATUS_COLOUR: Record<AssetStatus, string> = {
   PendingInstallation: '#f0ad4e',
@@ -68,6 +73,7 @@ function toLatLngRings(area: Area): [number, number][][] {
 /** The map page: a street map that opens on Auckland, New Zealand, with the Areas and the Assets in view. */
 export function MapPage() {
   const api = useApi()
+  const { roles } = useAuth()
   const [areas, setAreas] = useState<Area[]>([])
   const [assets, setAssets] = useState<Asset[]>([])
   const [view, setView] = useState<MapView>()
@@ -75,6 +81,9 @@ export function MapPage() {
   const [adding, setAdding] = useState<Place>()
   const [added, setAdded] = useState<string>()
   const [selectedId, setSelectedId] = useState<string>()
+  // The corners that a manager has marked so far, or nothing when the manager is not drawing an Area.
+  const [corners, setCorners] = useState<Place[]>()
+  const [naming, setNaming] = useState(false)
   const selected = assets.find((asset) => asset.id === selectedId)
   const zoomedIn = view !== undefined && view.zoom >= MIN_ASSET_ZOOM
 
@@ -99,7 +108,9 @@ export function MapPage() {
       <MapContainer className="map" center={AUCKLAND} zoom={START_ZOOM}>
         <TileLayer url={TILE_URL} attribution={TILE_CREDIT} />
         <ViewWatcher onChange={setView} />
-        <ClickWatcher onClick={setAdding} />
+        <ClickWatcher
+          onClick={(place) => (corners ? setCorners([...corners, place]) : setAdding(place))}
+        />
         {areas.map((area) => (
           <Polygon
             key={area.id}
@@ -111,6 +122,22 @@ export function MapPage() {
               {area.code}
             </Tooltip>
           </Polygon>
+        ))}
+        {corners && corners.length >= 2 && (
+          <Polygon
+            positions={corners.map(({ lat, lng }): [number, number] => [lat, lng])}
+            interactive={false}
+            pathOptions={{ color: '#ea4e2d', weight: 3, dashArray: '6' }}
+          />
+        )}
+        {corners?.map(({ lat, lng }, index) => (
+          <CircleMarker
+            key={index}
+            center={[lat, lng]}
+            radius={5}
+            interactive={false}
+            pathOptions={{ color: '#ea4e2d', className: 'corner' }}
+          />
         ))}
         {zoomedIn &&
           assets.map((asset) => (
@@ -126,6 +153,48 @@ export function MapPage() {
             </CircleMarker>
           ))}
       </MapContainer>
+      {roles.includes(MANAGER_ROLE) && (
+        <div className="position-absolute top-0 start-0 mt-3 mt-md-5 ms-3 ms-md-5 map-notice">
+          {corners ? (
+            <div className="card card-body py-2 px-3 shadow-sm">
+              <p className="mb-2">Click the map to mark each corner of the Area.</p>
+              <div className="d-flex gap-2">
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-dark"
+                  disabled={corners.length === 0}
+                  onClick={() => setCorners(corners.slice(0, -1))}
+                >
+                  Undo
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-dark"
+                  onClick={() => setCorners(undefined)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-primary"
+                  disabled={corners.length < MIN_CORNERS}
+                  onClick={() => setNaming(true)}
+                >
+                  Finish
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="btn btn-primary shadow-sm"
+              onClick={() => setCorners([])}
+            >
+              Draw Area
+            </button>
+          )}
+        </div>
+      )}
       <div className="position-absolute top-0 start-50 translate-middle-x mt-3 mt-md-5 map-notice">
         {view && !zoomedIn && (
           <p className="alert alert-info py-1 px-3 shadow-sm" role="status">
@@ -150,6 +219,17 @@ export function MapPage() {
             setAssets((current) => current.map((a) => (a.id === changed.id ? changed : a)))
           }
           onClose={() => setSelectedId(undefined)}
+        />
+      )}
+      {corners && naming && (
+        <NewAreaDialog
+          corners={corners}
+          onCreated={(area) => {
+            setAreas((current) => [...current, area])
+            setCorners(undefined)
+            setNaming(false)
+          }}
+          onCancel={() => setNaming(false)}
         />
       )}
       {adding && (
