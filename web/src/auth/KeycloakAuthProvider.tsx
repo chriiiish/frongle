@@ -1,5 +1,5 @@
 import Keycloak from 'keycloak-js'
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { AuthContext, type Auth, type Profile } from './AuthContext'
 
 interface Config {
@@ -25,8 +25,12 @@ export function KeycloakAuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile>()
   const [accountUrl, setAccountUrl] = useState<string>()
 
+  // React runs effects twice in development. A second init would take the sign-in code from the URL again and fail.
+  const started = useRef(false)
+
   useEffect(() => {
-    let cancelled = false
+    if (started.current) return
+    started.current = true
     async function start() {
       const config: Config = await (await fetch('/config.json')).json()
       const client = new Keycloak({
@@ -41,7 +45,6 @@ export function KeycloakAuthProvider({ children }: { children: ReactNode }) {
         setProfile(profileFrom(client))
       }
       const isSignedIn = await client.init({ onLoad: 'login-required', pkceMethod: 'S256' })
-      if (cancelled) return
       setAccountUrl(`${config.keycloakUrl.replace(/\/$/, '')}/realms/${config.realm}/account`)
       setKeycloak(client)
       setToken(client.token)
@@ -49,9 +52,6 @@ export function KeycloakAuthProvider({ children }: { children: ReactNode }) {
       setAuthenticated(isSignedIn)
     }
     void start()
-    return () => {
-      cancelled = true
-    }
   }, [])
 
   const auth = useMemo<Auth>(

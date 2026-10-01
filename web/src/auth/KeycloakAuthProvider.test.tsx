@@ -1,4 +1,5 @@
 import { act, render, screen, waitFor } from '@testing-library/react'
+import { StrictMode } from 'react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useAuth } from './AuthContext'
@@ -161,4 +162,29 @@ it('sends the user to the Keycloak page that changes the password', async () => 
   await userEvent.click(await screen.findByRole('button', { name: 'Change it' }))
 
   expect(login).toHaveBeenCalledWith({ action: 'UPDATE_PASSWORD' })
+})
+
+it('starts Keycloak once even when React runs the effect twice, as it does in development', async () => {
+  init.mockClear()
+  init.mockResolvedValue(true)
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue({
+      json: async () => ({ keycloakUrl: 'https://kc.test', realm: 'frongle', clientId: 'x' }),
+    }),
+  )
+  function ShowToken() {
+    return <p>{useAuth().token}</p>
+  }
+
+  render(
+    <StrictMode>
+      <KeycloakAuthProvider>
+        <ShowToken />
+      </KeycloakAuthProvider>
+    </StrictMode>,
+  )
+
+  expect(await screen.findByText('old-token')).toBeInTheDocument()
+  expect(init).toHaveBeenCalledTimes(1)
 })
