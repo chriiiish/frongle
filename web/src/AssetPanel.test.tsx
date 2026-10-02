@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
 import { AssetPanel } from './AssetPanel'
@@ -31,6 +31,14 @@ const installed = {
   notes: 'Concrete base poured',
   occurredAt: '2026-09-20T01:00:00Z',
   version: 11,
+  images: [
+    {
+      id: 'image-1',
+      contentType: 'image/jpeg',
+      sizeBytes: 2048,
+      readUrl: 'https://s3.test/read/1',
+    },
+  ],
 }
 const checked = {
   id: 'event-2',
@@ -40,10 +48,11 @@ const checked = {
   notes: null,
   occurredAt: '2026-09-28T02:00:00Z',
   version: 12,
+  images: [],
 }
 
 // What the API holds. A test changes it after the panel loads, to stand for the save that the API makes.
-let events = [checked, installed]
+let events: object[] = [checked, installed]
 
 // The API answers by method and path. A test can replace any answer.
 function stubApi(answers: Record<string, { ok: boolean; status?: number; body: unknown }> = {}) {
@@ -195,6 +204,104 @@ it('closes on request', async () => {
   expect(onClose).toHaveBeenCalled()
 })
 
+it('shows the photos of an event and lets the user open one in full', async () => {
+  stubApi()
+
+  renderPanel()
+
+  const photo = await screen.findByRole('img', { name: 'Photo of Installed new post' })
+  expect(photo).toHaveAttribute('src', 'https://s3.test/read/1')
+  expect(photo.closest('a')).toHaveAttribute('href', 'https://s3.test/read/1')
+})
+
+it('uploads the photos of a new event straight to the storage link and shows them', async () => {
+  const added = { ...checked, id: 'event-3', title: 'Replaced lamp', version: 20 }
+  const withPhoto = {
+    ...added,
+    images: [
+      { id: 'image-9', contentType: 'image/png', sizeBytes: 4, readUrl: 'https://s3.test/read/9' },
+    ],
+  }
+  const fetchMock = stubApi({
+    'POST /api/assets/asset-1/events': { ok: true, status: 201, body: added },
+    'POST /api/assets/asset-1/events/event-3/images': {
+      ok: true,
+      status: 201,
+      body: { id: 'image-9', uploadUrl: 'https://s3.test/upload/9', contentType: 'image/png' },
+    },
+    'PUT https://s3.test/upload/9': { ok: true, body: {} },
+  })
+  renderPanel()
+  await screen.findByText('Annual check')
+  events = [withPhoto, checked, installed]
+
+  await userEvent.click(screen.getByRole('button', { name: 'Add event' }))
+  await userEvent.type(screen.getByLabelText('Title'), 'Replaced lamp')
+  const file = new File(['abcd'], 'lamp.png', { type: 'image/png' })
+  await userEvent.upload(screen.getByLabelText('Photos'), file)
+  await userEvent.click(screen.getByRole('button', { name: 'Add Event' }))
+
+  expect(await screen.findByRole('img', { name: 'Photo of Replaced lamp' })).toBeInTheDocument()
+  const asked = fetchMock.mock.calls.find(
+    ([url]) => url === '/api/assets/asset-1/events/event-3/images',
+  )!
+  expect(JSON.parse(asked[1]!.body as string)).toEqual({ contentType: 'image/png', sizeBytes: 4 })
+  const upload = fetchMock.mock.calls.find(([url]) => url === 'https://s3.test/upload/9')!
+  // The storage link is signed already, so the call must not carry the API token.
+  expect(upload[1]).toEqual({ method: 'PUT', headers: { 'Content-Type': 'image/png' }, body: file })
+})
+
+it('says which photo could not be uploaded and keeps the event that was saved', async () => {
+  const added = { ...checked, id: 'event-3', title: 'Replaced lamp', version: 20 }
+  stubApi({
+    'POST /api/assets/asset-1/events': { ok: true, status: 201, body: added },
+    'POST /api/assets/asset-1/events/event-3/images': {
+      ok: false,
+      status: 409,
+      body: { title: 'An Event holds 5 images at most. Remove one first.' },
+    },
+  })
+  renderPanel()
+  await screen.findByText('Annual check')
+  events = [added, checked, installed]
+
+  await userEvent.click(screen.getByRole('button', { name: 'Add event' }))
+  await userEvent.type(screen.getByLabelText('Title'), 'Replaced lamp')
+  await userEvent.upload(
+    screen.getByLabelText('Photos'),
+    new File(['abcd'], 'lamp.png', { type: 'image/png' }),
+  )
+  await userEvent.click(screen.getByRole('button', { name: 'Add Event' }))
+
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'lamp.png could not be uploaded. An Event holds 5 images at most.',
+  )
+  expect(screen.getByText('Replaced lamp')).toBeInTheDocument()
+})
+
+it('removes a photo from an event', async () => {
+  const fetchMock = stubApi({
+    'DELETE /api/assets/asset-1/events/event-1/images/image-1': {
+      ok: true,
+      status: 204,
+      body: undefined,
+    },
+  })
+  renderPanel()
+  await screen.findByRole('img', { name: 'Photo of Installed new post' })
+  events = [checked, { ...installed, images: [] }]
+
+  await userEvent.click(
+    screen.getByRole('button', { name: 'Remove photo 1 of 1 from Installed new post' }),
+  )
+
+  await waitFor(() => expect(screen.queryByRole('img')).not.toBeInTheDocument())
+  expect(fetchMock).toHaveBeenCalledWith(
+    '/api/assets/asset-1/events/event-1/images/image-1',
+    expect.objectContaining({ method: 'DELETE' }),
+  )
+})
+
 it('sends the newest version when the user saves again after the API refused a stale one', async () => {
   const newer = { ...checked, title: 'Checked by someone else', version: 13 }
   let putCount = 0
@@ -247,4 +354,67 @@ it('does not add the same event twice when only the refresh after the save fails
   expect(screen.queryByLabelText('Title')).not.toBeInTheDocument()
   expect(await screen.findByRole('alert')).toHaveTextContent('503')
   expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1)
+})
+
+it('tries every photo and names each one that could not be uploaded', async () => {
+  const added = { ...checked, id: 'event-3', title: 'Replaced lamp', version: 20 }
+  const fetchMock = stubApi({
+    'POST /api/assets/asset-1/events': { ok: true, status: 201, body: added },
+    'POST /api/assets/asset-1/events/event-3/images': {
+      ok: false,
+      status: 409,
+      body: { title: 'The photo was refused.' },
+    },
+  })
+  renderPanel()
+  await screen.findByText('Annual check')
+  events = [added, checked, installed]
+
+  await userEvent.click(screen.getByRole('button', { name: 'Add event' }))
+  await userEvent.type(screen.getByLabelText('Title'), 'Replaced lamp')
+  await userEvent.upload(screen.getByLabelText('Photos'), [
+    new File(['abcd'], 'one.png', { type: 'image/png' }),
+    new File(['abcd'], 'two.png', { type: 'image/png' }),
+  ])
+  await userEvent.click(screen.getByRole('button', { name: 'Add Event' }))
+
+  const alert = await screen.findByRole('alert')
+  expect(alert).toHaveTextContent('one.png could not be uploaded.')
+  expect(alert).toHaveTextContent('two.png could not be uploaded.')
+  const asks = fetchMock.mock.calls.filter(
+    ([url]) => url === '/api/assets/asset-1/events/event-3/images',
+  )
+  expect(asks).toHaveLength(2)
+})
+
+it('loads photos only when they scroll into view', async () => {
+  stubApi()
+
+  renderPanel()
+
+  expect(await screen.findByRole('img', { name: 'Photo of Installed new post' })).toHaveAttribute(
+    'loading',
+    'lazy',
+  )
+})
+
+it('tells each remove button apart by its photo and event', async () => {
+  const twoPhotos = {
+    ...installed,
+    images: [
+      { id: 'image-1', contentType: 'image/png', sizeBytes: 4, readUrl: 'https://s3.test/read/1' },
+      { id: 'image-2', contentType: 'image/png', sizeBytes: 4, readUrl: 'https://s3.test/read/2' },
+    ],
+  }
+  events = [checked, twoPhotos]
+  stubApi()
+
+  renderPanel()
+
+  expect(
+    await screen.findByRole('button', { name: 'Remove photo 1 of 2 from Installed new post' }),
+  ).toBeInTheDocument()
+  expect(
+    screen.getByRole('button', { name: 'Remove photo 2 of 2 from Installed new post' }),
+  ).toBeInTheDocument()
 })

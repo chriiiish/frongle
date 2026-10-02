@@ -87,3 +87,9 @@ h6 {
     border-radius: 0.5rem;
   }
 }
+
+.photo-thumb {
+  width: 5rem;
+  height: 5rem;
+  object-fit: cover;
+}
