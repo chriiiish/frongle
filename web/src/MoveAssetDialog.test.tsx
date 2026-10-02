@@ -87,3 +87,22 @@ it('cancels on request', async () => {
 
   expect(onCancel).toHaveBeenCalled()
 })
+
+it('cannot be closed while the move is being saved, so that a move the user cancelled is not applied', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() => new Promise(() => {})),
+  )
+  const onCancel = vi.fn()
+  render(
+    <AuthContext.Provider value={auth}>
+      <MoveAssetDialog asset={pole} location={where} onMoved={vi.fn()} onCancel={onCancel} />
+    </AuthContext.Provider>,
+  )
+  await userEvent.click(screen.getByRole('button', { name: 'Move Asset' }))
+
+  expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Close' })).toBeDisabled()
+  await userEvent.keyboard('{Escape}')
+  expect(onCancel).not.toHaveBeenCalled()
+})

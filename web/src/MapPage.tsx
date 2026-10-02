@@ -165,7 +165,12 @@ export function MapPage() {
   }
 
   function showFound(asset: Asset) {
-    setAssets((current) => (current.some((a) => a.id === asset.id) ? current : [...current, asset]))
+    // The search answer is newer than the copy on the map, which may be from before another user changed the Asset.
+    setAssets((current) =>
+      current.some((a) => a.id === asset.id)
+        ? current.map((a) => (a.id === asset.id ? asset : a))
+        : [...current, asset],
+    )
     setSelectedId(asset.id)
     setFlyTarget({ center: [asset.latitude, asset.longitude] })
   }
@@ -324,6 +329,8 @@ export function MapPage() {
           }
           onClose={() => setSelectedId(undefined)}
           onMove={() => {
+            // The map sends a click to the corners first, so a move cannot start while an Area is drawn.
+            setCorners(undefined)
             setMoving(selected)
             setSelectedId(undefined)
           }}

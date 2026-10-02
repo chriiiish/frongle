@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 import { type Asset } from './api'
 import { useApi } from './useApi'
 
@@ -9,17 +9,22 @@ export function SearchBox({ onPick }: { onPick: (asset: Asset) => void }) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<Asset[]>()
   const [problem, setProblem] = useState<string>()
+  // Counts the searches, so that only the answer to the latest one reaches the screen.
+  const latest = useRef(0)
 
-  async function search(event: FormEvent) {
+  async function submit(event: FormEvent) {
     event.preventDefault()
     const wanted = text.trim()
     if (wanted === '') return
     setProblem(undefined)
+    const search = ++latest.current
     try {
-      setResults(await api.searchAssets(wanted))
+      const found = await api.searchAssets(wanted)
+      if (search !== latest.current) return
+      setResults(found)
       setQuery(wanted)
     } catch (failure) {
-      setProblem((failure as Error).message)
+      if (search === latest.current) setProblem((failure as Error).message)
     }
   }
 
@@ -31,7 +36,7 @@ export function SearchBox({ onPick }: { onPick: (asset: Asset) => void }) {
 
   return (
     <div>
-      <form className="input-group shadow-sm" role="search" onSubmit={search}>
+      <form className="input-group shadow-sm" role="search" onSubmit={submit}>
         <input
           className="form-control"
           type="search"

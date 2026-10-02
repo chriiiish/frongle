@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { Asset } from './api'
@@ -77,4 +77,32 @@ it('does not search for an empty text', async () => {
   await userEvent.click(screen.getByRole('button', { name: 'Search' }))
 
   expect(fetchMock).not.toHaveBeenCalled()
+})
+
+it('shows the answer to the latest search when an earlier search answers last', async () => {
+  const answers: ((assets: Asset[]) => void)[] = []
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(
+      () =>
+        new Promise((resolve) =>
+          answers.push((assets) => resolve({ ok: true, json: async () => assets })),
+        ),
+    ),
+  )
+  render(
+    <AuthContext.Provider value={auth}>
+      <SearchBox onPick={vi.fn()} />
+    </AuthContext.Provider>,
+  )
+  const box = screen.getByRole('searchbox', { name: 'Find an Asset' })
+  await userEvent.type(box, 'MN{Enter}')
+  await userEvent.clear(box)
+  await userEvent.type(box, 'OT{Enter}')
+
+  await act(async () => answers[1]([{ ...pole, friendlyId: 'OT-LP-00001' }]))
+  await act(async () => answers[0]([{ ...pole, id: 'asset-2', friendlyId: 'MN-LP-00009' }]))
+
+  expect(screen.getByRole('button', { name: /OT-LP-00001/ })).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /MN-LP-00009/ })).not.toBeInTheDocument()
 })

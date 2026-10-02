@@ -18,11 +18,23 @@ function describe(change: HistoryChange) {
 /** Lists who changed the Asset, its Events, and their photos, what they changed, and when. Newest first. */
 export function HistoryList({ assetId }: { assetId: string }) {
   const api = useApi()
-  const [changes, setChanges] = useState<HistoryChange[]>()
-  const [problem, setProblem] = useState<string>()
+  // The answer remembers its Asset, so the answer for an Asset that is no longer selected is ignored.
+  const [answer, setAnswer] = useState<{
+    assetId: string
+    changes?: HistoryChange[]
+    problem?: string
+  }>()
+  const { changes, problem } = answer?.assetId === assetId ? answer : {}
 
   useEffect(() => {
-    api.listHistory(assetId).then(setChanges, (failure: Error) => setProblem(failure.message))
+    let current = true
+    api.listHistory(assetId).then(
+      (listed) => current && setAnswer({ assetId, changes: listed }),
+      (failure: Error) => current && setAnswer({ assetId, problem: failure.message }),
+    )
+    return () => {
+      current = false
+    }
   }, [api, assetId])
 
   if (problem)

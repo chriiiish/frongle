@@ -701,3 +701,30 @@ it('keeps a new area on the map when the list request that began before it answe
 
   expect(screen.getByTestId('area')).toHaveTextContent('OT')
 })
+
+it('replaces the stale copy of an asset on the map with the fresher one that a search found', async () => {
+  const fresher = { ...pole, latitude: -37.046, longitude: 174.856, version: 9 }
+  stubApi({ '/api/assets/search': [fresher], '/api/assets/asset-1/events': [] })
+  await renderMapPage()
+  await screen.findByTestId('asset')
+
+  await userEvent.type(screen.getByRole('searchbox', { name: 'Find an Asset' }), 'LP{Enter}')
+  await userEvent.click(await screen.findByRole('button', { name: /MN-LP-00001/ }))
+
+  expect(screen.getAllByTestId('asset')).toHaveLength(1)
+  expect(screen.getByTestId('asset')).toHaveAttribute('data-center', '-37.046,174.856')
+})
+
+it('stops drawing an area when the manager starts to move an asset', async () => {
+  stubApi({ '/api/assets/asset-1/events': [] })
+  await renderMapPage(MANAGER)
+  await userEvent.click(await screen.findByTestId('asset'))
+  await screen.findByRole('heading', { name: 'MN-LP-00001' })
+  await userEvent.click(screen.getByRole('button', { name: 'Draw Area' }))
+
+  await userEvent.click(screen.getByRole('button', { name: 'Move' }))
+  await click(-37.0451, 174.8651)
+
+  expect(screen.queryAllByTestId('corner')).toHaveLength(0)
+  expect(screen.getByRole('dialog', { name: 'Move MN-LP-00001' })).toBeInTheDocument()
+})
