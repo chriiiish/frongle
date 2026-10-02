@@ -1,5 +1,5 @@
 import 'leaflet/dist/leaflet.css'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   CircleMarker,
   MapContainer,
@@ -10,6 +10,7 @@ import {
   useMapEvents,
 } from 'react-leaflet'
 import { type Area, type Asset, type AssetStatus, type Bounds } from './api'
+import { NewAssetDialog, type Place } from './NewAssetDialog'
 import { useApi } from './useApi'
 
 const AUCKLAND: [number, number] = [-36.8485, 174.7633]
@@ -65,6 +66,12 @@ function ViewWatcher({ onChange }: { onChange: (view: MapView) => void }) {
   return null
 }
 
+/** Tells the page where the user clicked the map. */
+function ClickWatcher({ onClick }: { onClick: (place: Place) => void }) {
+  useMapEvents({ click: (event) => onClick(event.latlng) })
+  return null
+}
+
 /** The API sends longitude first, as GeoJSON does, and Leaflet wants latitude first. */
 function toLatLngRings(area: Area): [number, number][][] {
   return area.boundary.coordinates.map((ring) => ring.map(([lng, lat]) => [lat, lng]))
@@ -76,8 +83,12 @@ export function MapPage() {
   const [areas, setAreas] = useState<Area[]>([])
   const [assets, setAssets] = useState<Asset[]>([])
   const [view, setView] = useState<MapView>()
+  const [adding, setAdding] = useState<Place>()
+  const [added, setAdded] = useState<string>()
   const [areasProblem, setAreasProblem] = useState<string>()
   const [assetsProblem, setAssetsProblem] = useState<string>()
+  // Counts the Assets that the user added, so that a list request that began before one cannot answer without it.
+  const additions = useRef(0)
   const zoomedIn = view !== undefined && view.zoom >= MIN_ASSET_ZOOM
 
   useEffect(() => {
@@ -99,18 +110,17 @@ export function MapPage() {
     if (!view || !zoomedIn) return
     // A slow answer for an earlier view must not replace the Assets of the view the user sees now.
     let current = true
-    const timer = setTimeout(
-      () =>
-        api.listAssets(view.bounds).then(
-          (listed) => {
-            if (!current) return
-            setAssets(listed)
-            setAssetsProblem(undefined)
-          },
-          (failure: Error) => current && setAssetsProblem(failure.message),
-        ),
-      MOVE_DELAY_MS,
-    )
+    const timer = setTimeout(() => {
+      const addedBefore = additions.current
+      void api.listAssets(view.bounds).then(
+        (listed) => {
+          if (!current || addedBefore !== additions.current) return
+          setAssets(listed)
+          setAssetsProblem(undefined)
+        },
+        (failure: Error) => current && setAssetsProblem(failure.message),
+      )
+    }, MOVE_DELAY_MS)
     return () => {
       current = false
       clearTimeout(timer)
@@ -128,6 +138,7 @@ export function MapPage() {
       >
         <TileLayer url={TILE_URL} attribution={TILE_CREDIT} />
         <ViewWatcher onChange={setView} />
+        <ClickWatcher onClick={setAdding} />
         {areas.map((area) => (
           <Polygon
             key={area.id}
@@ -146,6 +157,7 @@ export function MapPage() {
               key={asset.id}
               center={[asset.latitude, asset.longitude]}
               radius={9}
+              bubblingMouseEvents={false}
               pathOptions={{ color: STATUS_COLOUR[asset.status], fillOpacity: 0.9 }}
             >
               <Tooltip>
@@ -160,6 +172,11 @@ export function MapPage() {
             Zoom in to see Assets.
           </p>
         )}
+        {added && (
+          <p className="alert alert-success py-1 px-3 shadow-sm" role="status">
+            Added {added}.
+          </p>
+        )}
         {Object.entries({ areas: areasProblem, assets: assetsProblem }).map(
           ([source, problem]) =>
             problem && (
@@ -169,6 +186,18 @@ export function MapPage() {
             ),
         )}
       </div>
+      {adding && (
+        <NewAssetDialog
+          location={adding}
+          onCreated={(asset) => {
+            additions.current += 1
+            setAssets((current) => [...current, asset])
+            setAdded(asset.friendlyId)
+            setAdding(undefined)
+          }}
+          onCancel={() => setAdding(undefined)}
+        />
+      )}
     </section>
   )
 }
