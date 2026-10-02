@@ -14,9 +14,7 @@ Maintenance managers see asset status, set maintenance schedules, and assign wor
 - `api/`: C# .NET 10 API with PostgreSQL (EF Core).
 - `deploy/`: Terraform for AWS (VPC, EKS, ECR, RDS), a Helm chart, and the files for the local Docker Compose stack.
 
-## Get started locally
-
-### Tools to install
+## Tools to install
 
 | Tool                                      | Version | Used for                                  |
 | ----------------------------------------- | ------- | ----------------------------------------- |
@@ -24,19 +22,20 @@ Maintenance managers see asset status, set maintenance schedules, and assign wor
 | [Node.js](https://nodejs.org/)            | 24      | Web app, tests, and Prettier              |
 | [.NET SDK](https://dotnet.microsoft.com/) | 10      | API and API tests                         |
 
-Optional: [Helm](https://helm.sh/) and [Terraform](https://www.terraform.io/) (to check `deploy/`) and [Trivy](https://trivy.dev/) (to run security scans).
+Optional: [Helm](https://helm.sh/) and [Terraform](https://www.terraform.io/) (to check `deploy/`), [Trivy](https://trivy.dev/) (to run security scans), and `psql` (to reach the database from your terminal).
 
-On macOS with Homebrew: `brew install node dotnet` and `brew install --cask docker`.
+On macOS with Homebrew: `brew install node dotnet libpq` (then `brew link --force libpq` to get `psql`) and `brew install --cask docker`.
 
-### Steps
+## Run the whole project locally
 
-1. Start Docker Desktop. In its settings, give Docker at least 4 GB of memory. With less, Keycloak cannot start.
-2. Make sure that port 80 is free on your machine. The stack publishes its gateway on `http://localhost`.
-3. Clone the repository and go to its folder.
-4. Run `docker compose up --build`. It builds the API and web images, then starts Postgres, Keycloak, the API, the web app, and a gateway. The first run takes a few minutes because of image downloads.
-5. Wait until Keycloak prints `Running the server`. Add `-d` to the command to run the stack in the background.
-6. Open http://localhost. The app sends you to the sign-in page.
-7. Sign in as one of the demo users below. The password for all of them is `password`.
+Start Docker Desktop first. Give Docker at least 4 GB of memory, or Keycloak cannot start. Make sure that port 80 is free, because the stack publishes the app on `http://localhost`.
+
+```
+docker compose up --build      # builds the images and starts everything
+docker compose ps
+```
+
+The first run takes a few minutes because of image downloads. Keycloak is the slowest to start. Add `-d` to run the stack in the background. When Keycloak prints `Running the server`, open http://localhost and sign in as one of these users. The password for all of them is `password`.
 
 | User                  | Role                | Tenant |
 | --------------------- | ------------------- | ------ |
@@ -44,16 +43,68 @@ On macOS with Homebrew: `brew install node dotnet` and `brew install --cask dock
 | `team@acme.test`      | work-team           | acme   |
 | `manager@globex.test` | maintenance-manager | globex |
 
-After you sign in, the page shows the greeting from the API with your tenant and roles. The menu at the top has Home and Logout.
+To deploy your code changes, run `docker compose up --build` again. It is safe to repeat. To stop the stack, run `docker compose down`. To also delete the database and the photos, run:
 
-Useful extras:
+```
+docker compose down -v
+```
 
-- Keycloak runs at http://localhost/auth. The admin login is `admin` with password `admin`.
-- To deploy code changes, run `docker compose up --build` again. It is safe to repeat.
-- To stop the stack, run `docker compose down`. Add `-v` to also delete the database.
-- The demo users come from `deploy/local/realm.json`. Keycloak imports it only when the realm does not exist, so run `docker compose down -v` after you change it.
+Keycloak runs at http://localhost/auth. The admin login is `admin` with password `admin`. The demo users come from `deploy/local/realm.json`. Keycloak imports it only when the realm does not exist, so run `docker compose down -v` after you change it. Event photos go to MinIO, which the stack serves at http://storage.localhost.
 
-### Run the tests
+## Run the web with hot reload
+
+The dev server shows your changes in the browser as you save them. It needs the local stack for sign-in, because Keycloak runs there. It sends calls to `/api` to an API on your machine, so start that too (see the next section).
+
+```
+cd web
+npm install
+npm run dev
+```
+
+Open http://localhost:5173 and sign in with a demo user. The sign-in page comes from the stack, and it sends you back to port 5173.
+
+- The proxy to the API is in `web/vite.config.ts`, and the Keycloak address is in `web/public/config.json`.
+- To run the tests again each time you save, use `npx vitest` in `web/`.
+
+## Run the API locally with debugging
+
+The API runs on your machine, so that you can set breakpoints. It uses the database, the sign-in service, and the other parts that run in the local stack. Start the stack first. The stack publishes the database on port 5432 of your machine. Then start the API in one of these ways:
+
+- Visual Studio Code with the C# Dev Kit: open the `api/` folder, open `Frongle.sln`, and press F5. Choose the `Frongle.Api` project.
+- JetBrains Rider or Visual Studio: open `api/Frongle.sln`, choose the `http` launch profile, and start the debugger.
+- A terminal: run `cd api && dotnet watch --project src/Frongle.Api`. It restarts on every save. To debug, attach your editor to the `Frongle.Api` process.
+
+The API listens on http://localhost:5162. Check it with `curl http://localhost:5162/health/ready`. It answers `200` when it reaches the database. The settings for this mode are in `api/src/Frongle.Api/appsettings.Development.json`. They point to the stack's database and to its sign-in service, and the credentials are for local work only.
+
+With `npm run dev` running as well, a click in the browser at http://localhost:5173 reaches your breakpoints. The API at http://localhost, which runs inside the stack, is a separate copy that serves the built images.
+
+## Connect to the database locally
+
+The local stack runs PostgreSQL in the `postgres` service and publishes it on port 5432 of your machine.
+
+Then connect with `psql`, or with any database tool, using these settings:
+
+| Setting  | Value                 |
+| -------- | --------------------- |
+| Host     | `localhost`           |
+| Port     | `5432`                |
+| Database | `frongle`             |
+| User     | `frongle`             |
+| Password | `local-only-password` |
+
+```
+psql "postgresql://frongle:local-only-password@localhost:5432/frongle"
+```
+
+Without `psql` on your machine, open a shell in the container instead:
+
+```
+docker compose exec postgres psql -U frongle -d frongle
+```
+
+This login owns the database and has superuser rights, so it sees the data of every tenant. If another PostgreSQL already uses port 5432 on your machine, change the port mapping of the `postgres` service in `compose.yaml`, for example to `55432:5432`, and use that port. Keycloak keeps its own data in a second database called `keycloak` on the same server. `docker compose down -v` deletes the database.
+
+## Run the tests
 
 ```
 cd web && npm install && npm test

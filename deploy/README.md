@@ -30,7 +30,7 @@ The workflow does these steps in order:
 2. Install ingress-nginx behind a Network Load Balancer.
 3. Point `frongle.cjl.nz` at the load balancer with a Route 53 CNAME record in the `cjl.nz` hosted zone.
 4. Install cert-manager. The chart creates a Let's Encrypt `ClusterIssuer` and the ingress asks for a certificate.
-5. Install the Keycloak operator and copy the RDS login into the `frongle-db` secret.
+5. Install the Keycloak operator and copy the RDS login into the `frongle-db` secret. The `frongle-app-db` secret holds the login of the restricted database role that serves requests.
 6. Run `helm upgrade --install` with `values-production.yaml`.
 7. Make sure that the site answers over HTTPS.
 
@@ -40,6 +40,6 @@ The chart creates the `keycloak` database on RDS with a hook job. Keycloak runs 
 
 ```
 terraform init -backend=false && terraform validate
-helm lint helm/frongle --set database.host=example --set database.existingSecret=example
+helm lint helm/frongle --set database.host=example --set database.existingSecret=example --set database.appExistingSecret=example --set storage.bucket=example
 helm/frongle/tests/tls.sh
 ```

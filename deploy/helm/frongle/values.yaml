@@ -8,6 +8,7 @@ api:
   replicas: 2
   port: 8080
   migrateOnStartup: true
+  roleArn: '' # IAM role that the API pod assumes on EKS to reach the photo bucket. Empty uses no role.
 
 web:
   image:
@@ -21,7 +22,8 @@ database:
   port: 5432
   name: frongle
   ssl: true # Use TLS to reach the database.
-  existingSecret: '' # Secret with the keys "username" and "password". Required.
+  existingSecret: '' # Secret with the keys "username" and "password" of the database owner, who runs the migrations. Required.
+  appExistingSecret: '' # Secret with the keys "username" and "password" of a role that is not a superuser and has NOBYPASSRLS, which serves requests. Required.
 
 keycloak:
   instances: 2
@@ -37,3 +39,9 @@ ingress:
     secretName: frongle-tls
     clusterIssuer: letsencrypt
     email: '' # Let's Encrypt contact address. Required when tls.enabled is true.
+
+# Where Event photos live. The API signs links, and the browser sends and reads the photos directly.
+storage:
+  bucket: '' # Required.
+  region: us-east-1
+  serviceUrl: '' # Address of an S3-compatible server such as MinIO. Empty uses Amazon S3.

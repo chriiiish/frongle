@@ -4,14 +4,18 @@ name: frongle
 
 services:
   postgres:
-    image: postgres:17-alpine
+    image: imresamu/postgis:17-3.5-bookworm
     environment:
       POSTGRES_DB: frongle
       POSTGRES_USER: frongle
       POSTGRES_PASSWORD: local-only-password
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./deploy/local/create-keycloak-database.sql:/docker-entrypoint-initdb.d/create-keycloak-database.sql:ro
+      - ./deploy/local/create-keycloak-database.sql:/docker-entrypoint-initdb.d/1-create-keycloak-database.sql:ro
+      - ./deploy/local/create-app-role.sql:/docker-entrypoint-initdb.d/2-create-app-role.sql:ro
+    # For psql and for the API when you run it on your machine. The login owns the database, so it sees every tenant.
+    ports:
+      - '127.0.0.1:5432:5432'
     healthcheck:
       test: ['CMD', 'pg_isready', '-U', 'frongle', '-d', 'frongle']
       interval: 5s
@@ -45,21 +49,46 @@ services:
   api:
     build: ./api
     environment:
-      ConnectionStrings__Frongle: Host=postgres;Port=5432;Database=frongle;Username=frongle;Password=local-only-password;SSL Mode=Disable
+      # Requests use the restricted app role, so row-level security applies. Only the migrations use the owner.
+      ConnectionStrings__Frongle: Host=postgres;Port=5432;Database=frongle;Username=frongle_app;Password=local-only-app-password;SSL Mode=Disable
+      ConnectionStrings__Migrations: Host=postgres;Port=5432;Database=frongle;Username=frongle;Password=local-only-password;SSL Mode=Disable
       Database__MigrateOnStartup: 'true'
       Authentication__Authority: http://localhost/auth/realms/frongle
       Authentication__ClientId: frongle-web
       Authentication__MetadataAddress: http://keycloak:8080/auth/realms/frongle/.well-known/openid-configuration
       # The metadata address is plain http://, so the API cannot require HTTPS for it.
       Authentication__RequireHttpsMetadata: 'false'
+      Storage__Bucket: frongle-images
+      Storage__Region: us-east-1
+      Storage__ServiceUrl: http://storage.localhost
+      Storage__AccessKey: frongle
+      Storage__SecretKey: local-only-secret
     depends_on:
       postgres:
         condition: service_healthy
 
   web:
     build: ./web
+
+  # MinIO treats each top-level folder of its data as a bucket. The volume is made for MinIO's non-root user.
+  make-bucket:
+    image: busybox:1.37
+    command: sh -c 'mkdir -p /data/frongle-images && chown -R 65532:65532 /data'
     volumes:
-      - ./deploy/local/config.json:/usr/share/nginx/html/config.json:ro
+      - minio-data:/data
+
+  # Stands in for S3.
+  minio:
+    image: cgr.dev/chainguard/minio:latest
+    command: ['server', '/data']
+    environment:
+      MINIO_ROOT_USER: frongle
+      MINIO_ROOT_PASSWORD: local-only-secret
+    volumes:
+      - minio-data:/data
+    depends_on:
+      make-bucket:
+        condition: service_completed_successfully
 
   # Plays the part of the ingress: one address for the web app, the API, and Keycloak.
   gateway:
@@ -68,10 +97,17 @@ services:
       - '80:80'
     volumes:
       - ./deploy/local/gateway.conf:/etc/nginx/conf.d/default.conf:ro
+    # The API signs photo links for http://storage.localhost, so it must reach that name too.
+    networks:
+      default:
+        aliases:
+          - storage.localhost
     depends_on:
       - web
       - api
       - keycloak
+      - minio
 
 volumes:
   postgres-data:
+  minio-data:

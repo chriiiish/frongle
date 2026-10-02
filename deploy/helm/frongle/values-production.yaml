@@ -4,6 +4,7 @@ publicUrl: https://frongle.cjl.nz
 
 database:
   existingSecret: frongle-db
+  appExistingSecret: frongle-app-db
 
 # Two Keycloak pods and the realm import must fit on two t3.medium nodes.
 keycloak:

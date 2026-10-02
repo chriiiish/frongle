@@ -6,4 +6,8 @@
 {{ required "database.existingSecret is required" .Values.database.existingSecret -}}
 {{- end }}
 
+{{- define "frongle.dbAppSecret" -}}
+{{ required "database.appExistingSecret is required" .Values.database.appExistingSecret -}}
+{{- end }}
+
 {{- define "frongle.keycloakName" -}}{{ .Release.Name }}-keycloak{{- end }}

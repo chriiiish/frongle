@@ -16,8 +16,8 @@ Two kinds of user:
 ## Commands
 
 - Web: `cd web && npm test`, `npm run lint`, `npm run build`
-- API: `cd api && dotnet test`
-- Deploy: `cd deploy/terraform && terraform validate`, `helm lint deploy/helm/frongle --set database.host=example --set database.existingSecret=example`
+- API: `cd api && dotnet test` (needs Docker: the tests start a PostGIS database with Testcontainers)
+- Deploy: `cd deploy/terraform && terraform validate`, `helm lint deploy/helm/frongle --set database.host=example --set database.existingSecret=example --set database.appExistingSecret=example --set storage.bucket=example`
 - Local stack: `docker compose up --build` and `docker compose down`
 - Security scan: `trivy fs --scanners vuln,secret,misconfig --severity HIGH,CRITICAL .`
 
@@ -26,7 +26,11 @@ Two kinds of user:
 - Multi-tenant: one shared database. Every tenant-owned table has a `tenant_id`. Isolation uses Postgres row-level security and an EF Core global query filter. The API takes the tenant from the validated token claim `tenant_id`, never from request data.
 - Auth: Keycloak (Operator, one `frongle` tenant space) runs in Kubernetes in prod and in Docker Compose locally. Roles are `maintenance-manager` and `work-team`. The Helm chart builds that space in `keycloak-realm.yaml`. Locally, `deploy/local/realm.json` holds the same space plus demo users. Change both together.
 - The web app signs in with keycloak-js (PKCE). It reads `/config.json` at runtime, so one image works in every environment.
-- Local and prod only. Prod uses the Helm chart on EKS. Local uses `compose.yaml` (Postgres, Keycloak, API, web, and an nginx gateway on `http://localhost`).
+- Domain language lives in `CONTEXT.md`. Decisions that are hard to reverse live in `docs/adr/`. Read both before you change the Asset model.
+- Tenant-owned types implement `ITenantOwned`. `FrongleDbContext` filters them by tenant, stamps the tenant on new rows, and writes one `AuditRecord` per changed field. A migration for a tenant-owned table must call `TenantSecurity.EnableRowLevelSecurity`. Postgres skips row-level security for superusers and for roles with `BYPASSRLS`, so the API must connect as a role without them.
+- Locations and Area boundaries are PostGIS `geography` columns. Raw SQL that reads a table with a `Version` row-version column must select `xmin` (`SELECT *, xmin`).
+- Event photos go to S3 (MinIO locally) through pre-signed links from `IImageStorage`. The API never handles the file bytes.
+- Local and prod only. Prod uses the Helm chart on EKS. Local uses `compose.yaml` (PostGIS Postgres, Keycloak, API, web, MinIO, and an nginx gateway on `http://localhost`).
 
 ## Working rules
 

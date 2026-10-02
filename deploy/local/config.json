@@ -1,5 +1,0 @@
-{
-  "keycloakUrl": "http://localhost/auth",
-  "realm": "frongle",
-  "clientId": "frongle-web"
-}
