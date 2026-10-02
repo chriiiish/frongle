@@ -6,7 +6,14 @@ import { KeycloakAuthProvider } from './KeycloakAuthProvider'
 
 const init = vi.hoisted(() => vi.fn().mockResolvedValue(false))
 const login = vi.hoisted(() => vi.fn())
-const clients = vi.hoisted(() => [] as { token: string; onAuthRefreshSuccess?: () => void }[])
+const clients = vi.hoisted(
+  () =>
+    [] as {
+      token: string
+      tokenParsed: { realm_access: { roles: string[] } }
+      onAuthRefreshSuccess?: () => void
+    }[],
+)
 
 vi.mock('keycloak-js', () => ({
   default: class {
@@ -15,7 +22,12 @@ vi.mock('keycloak-js', () => ({
     constructor() {
       clients.push(this)
     }
-    tokenParsed = { given_name: 'Morgan', family_name: 'Manager', email: 'manager@acme.test' }
+    tokenParsed = {
+      given_name: 'Morgan',
+      family_name: 'Manager',
+      email: 'manager@acme.test',
+      realm_access: { roles: ['maintenance-manager', 'offline_access'] },
+    }
     init = init
     login = login
     updateToken = async () => {
@@ -116,6 +128,27 @@ it('tells the app the name and email that the token carries', async () => {
   expect(await screen.findByText('Morgan Manager manager@acme.test')).toBeInTheDocument()
 })
 
+it('tells the app the roles that the token carries', async () => {
+  init.mockResolvedValueOnce(true)
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue({
+      json: async () => ({ keycloakUrl: 'https://kc.test', realm: 'frongle', clientId: 'x' }),
+    }),
+  )
+  function ShowRoles() {
+    return <p>{useAuth().roles.join(' ')}</p>
+  }
+
+  render(
+    <KeycloakAuthProvider>
+      <ShowRoles />
+    </KeycloakAuthProvider>,
+  )
+
+  expect(await screen.findByText('maintenance-manager offline_access')).toBeInTheDocument()
+})
+
 it('gives the app the new token when Keycloak renews it in the background', async () => {
   init.mockResolvedValueOnce(true)
   vi.stubGlobal(
@@ -139,6 +172,31 @@ it('gives the app the new token when Keycloak renews it in the background', asyn
   act(() => client.onAuthRefreshSuccess?.())
 
   expect(await screen.findByText('renewed-token')).toBeInTheDocument()
+})
+
+it('gives the app the new roles when Keycloak renews the token in the background', async () => {
+  init.mockResolvedValueOnce(true)
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue({
+      json: async () => ({ keycloakUrl: 'https://kc.test', realm: 'frongle', clientId: 'x' }),
+    }),
+  )
+  function ShowRoles() {
+    return <p>{useAuth().roles.join(' ')}</p>
+  }
+  render(
+    <KeycloakAuthProvider>
+      <ShowRoles />
+    </KeycloakAuthProvider>,
+  )
+  await screen.findByText('maintenance-manager offline_access')
+
+  const client = clients[clients.length - 1]
+  client.tokenParsed = { realm_access: { roles: ['work-team'] } }
+  act(() => client.onAuthRefreshSuccess?.())
+
+  expect(await screen.findByText('work-team')).toBeInTheDocument()
 })
 
 it('sends the user to the Keycloak page that changes the password', async () => {

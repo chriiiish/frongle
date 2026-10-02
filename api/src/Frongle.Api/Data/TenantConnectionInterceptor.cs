@@ -25,7 +25,9 @@ public sealed class TenantConnectionInterceptor(ICaller caller) : DbConnectionIn
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
-    // A pooled connection keeps its session settings, so every open sets the tenant, even to an empty one.
+    /// <summary>Builds the command that sets the tenant on a connection. A pooled connection keeps its session settings, so every open sets the tenant, even to an empty one.</summary>
+    /// <param name="connection">The connection that was just opened.</param>
+    /// <returns>A command that the caller must dispose after it runs.</returns>
     private DbCommand CreateSetTenantCommand(DbConnection connection)
     {
         var command = connection.CreateCommand();
