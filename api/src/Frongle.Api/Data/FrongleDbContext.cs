@@ -34,6 +34,9 @@ public class FrongleDbContext : DbContext
     /// <summary>The Areas of the caller's tenant.</summary>
     public DbSet<Area> Areas => Set<Area>();
 
+    /// <summary>The Assets of the caller's tenant.</summary>
+    public DbSet<Asset> Assets => Set<Asset>();
+
     /// <summary>Every recorded change, for the caller's tenant only.</summary>
     public DbSet<AuditRecord> AuditRecords => Set<AuditRecord>();
 
@@ -67,6 +70,22 @@ public class FrongleDbContext : DbContext
             area.Property(a => a.Boundary).HasColumnName("boundary").HasColumnType("geography(Polygon, 4326)");
             area.HasIndex(a => new { a.TenantId, a.Code }).IsUnique();
             area.HasIndex(a => a.Boundary).HasMethod("gist");
+        });
+
+        modelBuilder.Entity<Asset>(asset =>
+        {
+            asset.ToTable("assets");
+            asset.Property(a => a.Id).HasColumnName("id");
+            asset.Property(a => a.Type).HasColumnName("type").HasConversion<string>();
+            asset.Property(a => a.AreaId).HasColumnName("area_id");
+            asset.Property(a => a.AreaCode).HasColumnName("area_code");
+            asset.Property(a => a.Number).HasColumnName("number");
+            asset.Property(a => a.FriendlyId).HasColumnName("friendly_id");
+            asset.Property(a => a.Location).HasColumnName("location").HasColumnType("geography(Point, 4326)");
+            asset.HasOne<Area>().WithMany().HasForeignKey(a => a.AreaId).OnDelete(DeleteBehavior.Restrict);
+            asset.HasIndex(a => new { a.TenantId, a.FriendlyId }).IsUnique();
+            asset.HasIndex(a => new { a.TenantId, a.AreaId, a.Type, a.Number }).IsUnique();
+            asset.HasIndex(a => a.Location).HasMethod("gist");
         });
 
         foreach (var entityType in modelBuilder.Model.GetEntityTypes().Where(t => typeof(ITenantOwned).IsAssignableFrom(t.ClrType)))
