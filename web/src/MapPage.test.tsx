@@ -55,13 +55,20 @@ vi.mock('react-leaflet', () => ({
   CircleMarker: ({
     center,
     pathOptions,
+    bubblingMouseEvents,
     children,
   }: {
     center: [number, number]
     pathOptions: { color: string }
+    bubblingMouseEvents?: boolean
     children: ReactNode
   }) => (
-    <div data-testid="asset" data-center={center.join(',')} data-color={pathOptions.color}>
+    <div
+      data-testid="asset"
+      data-center={center.join(',')}
+      data-color={pathOptions.color}
+      data-bubbling={String(bubblingMouseEvents)}
+    >
       {children}
     </div>
   ),
@@ -380,4 +387,38 @@ it('closes the dialog without adding anything when the user cancels', async () =
   await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
 
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+})
+
+it('does not pass a click on an asset through to the map, so that it does not open the add dialog', async () => {
+  stubApi()
+  await renderMapPage()
+
+  expect(await screen.findByTestId('asset')).toHaveAttribute('data-bubbling', 'false')
+})
+
+it('keeps a new asset on the map when a list request that began before it answers afterwards', async () => {
+  const created = {
+    ...pole,
+    id: 'asset-9',
+    friendlyId: 'MN-SS-00001',
+    status: 'PendingInstallation',
+  }
+  const listAnswers: ((assets: unknown[]) => void)[] = []
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') return { ok: true, status: 201, json: async () => created }
+      if (url.startsWith('/api/areas')) return { ok: true, json: async () => [] }
+      return { ok: true, json: () => new Promise((resolve) => listAnswers.push(resolve)) }
+    }),
+  )
+  await renderMapPage()
+  await waitFor(() => expect(listAnswers).toHaveLength(1))
+  await act(async () => leaflet.handlers.click({ latlng: { lat: -37.045, lng: 174.855 } }))
+  await userEvent.click(screen.getByRole('button', { name: 'Add Asset' }))
+  expect(await screen.findByTestId('asset')).toHaveTextContent('MN-SS-00001')
+
+  await act(async () => listAnswers[0]([]))
+
+  expect(screen.getByTestId('asset')).toHaveTextContent('MN-SS-00001')
 })
