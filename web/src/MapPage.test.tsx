@@ -446,3 +446,22 @@ it('keeps a new asset on the map when a list request that began before it answer
 
   expect(screen.getByTestId('asset')).toHaveTextContent('MN-SS-00001')
 })
+
+it('starts the panel afresh when the user picks another asset', async () => {
+  const second = { ...pole, id: 'asset-2', friendlyId: 'MN-LP-00002', latitude: -37.046 }
+  stubApi({
+    '/api/assets': [pole, second],
+    '/api/assets/asset-1/events': [],
+    '/api/assets/asset-2/events': [],
+  })
+  await renderMapPage()
+  const markers = await screen.findAllByTestId('asset')
+  await userEvent.click(markers[0])
+  await userEvent.click(await screen.findByRole('button', { name: 'Add event' }))
+  expect(screen.getByLabelText('Title')).toBeInTheDocument()
+
+  await userEvent.click(markers[1])
+
+  expect(await screen.findByRole('heading', { name: 'MN-LP-00002' })).toBeInTheDocument()
+  expect(screen.queryByLabelText('Title')).not.toBeInTheDocument()
+})

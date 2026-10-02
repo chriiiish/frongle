@@ -192,6 +192,7 @@ export function MapPage() {
       </div>
       {selected && (
         <AssetPanel
+          key={selected.id}
           asset={selected}
           onChanged={(changed) =>
             setAssets((current) => current.map((a) => (a.id === changed.id ? changed : a)))
