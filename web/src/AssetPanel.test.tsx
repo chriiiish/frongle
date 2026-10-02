@@ -1,0 +1,525 @@
+import { render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { afterEach, expect, it, vi } from 'vitest'
+import { AssetPanel } from './AssetPanel'
+import { AuthContext, type Auth } from './auth/AuthContext'
+
+const auth: Auth = {
+  authenticated: true,
+  token: 'jwt',
+  accountUrl: undefined,
+  profile: undefined,
+  roles: ['work-team'],
+  logout: vi.fn(),
+  refresh: vi.fn(),
+  changePassword: vi.fn(),
+}
+const pole = {
+  id: 'asset-1',
+  friendlyId: 'MN-LP-00001',
+  type: 'LightPost' as const,
+  areaCode: 'MN',
+  latitude: -37.045,
+  longitude: 174.855,
+  status: 'PendingInstallation' as const,
+  needsRetag: false,
+  formerFriendlyIds: [] as string[],
+  version: 3,
+}
+const installed = {
+  id: 'event-1',
+  assetId: 'asset-1',
+  type: 'Installed',
+  title: 'Installed new post',
+  notes: 'Concrete base poured',
+  occurredAt: '2026-09-20T01:00:00Z',
+  version: 11,
+  images: [
+    {
+      id: 'image-1',
+      contentType: 'image/jpeg',
+      sizeBytes: 2048,
+      readUrl: 'https://s3.test/read/1',
+    },
+  ],
+}
+const checked = {
+  id: 'event-2',
+  assetId: 'asset-1',
+  type: 'Checked',
+  title: 'Annual check',
+  notes: null,
+  occurredAt: '2026-09-28T02:00:00Z',
+  version: 12,
+  images: [],
+}
+
+// What the API holds. A test changes it after the panel loads, to stand for the save that the API makes.
+let events: object[] = [checked, installed]
+
+// The API answers by method and path. A test can replace any answer.
+function stubApi(answers: Record<string, { ok: boolean; status?: number; body: unknown }> = {}) {
+  const defaults: Record<string, { ok: boolean; status?: number; body: unknown }> = {
+    'GET /api/assets/asset-1/events': {
+      ok: true,
+      get body() {
+        return events
+      },
+    },
+    'GET /api/assets/asset-1': { ok: true, body: { ...pole, status: 'InService' } },
+  }
+  const fetchMock = vi.fn(async (url: string, init: RequestInit = {}) => {
+    const answer = { ...defaults, ...answers }[`${init.method ?? 'GET'} ${url}`]
+    if (!answer) return { ok: false, status: 404, json: async () => ({}) }
+    return { ok: answer.ok, status: answer.status ?? 200, json: async () => answer.body }
+  })
+  vi.stubGlobal('fetch', fetchMock)
+  return fetchMock
+}
+
+function renderPanel(
+  onChanged = vi.fn(),
+  onClose = vi.fn(),
+  asset: typeof pole = pole,
+  onMove = vi.fn(),
+) {
+  render(
+    <AuthContext.Provider value={auth}>
+      <AssetPanel asset={asset} onChanged={onChanged} onClose={onClose} onMove={onMove} />
+    </AuthContext.Provider>,
+  )
+  return { onChanged, onClose, onMove }
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+  events = [checked, installed]
+})
+
+it('names the asset and shows its type and status', async () => {
+  stubApi()
+
+  renderPanel()
+
+  expect(screen.getByRole('heading', { name: 'MN-LP-00001' })).toBeInTheDocument()
+  expect(screen.getByText('Light-post')).toBeInTheDocument()
+  expect(screen.getByText('Pending installation')).toBeInTheDocument()
+  await screen.findByText('Annual check')
+})
+
+it('lists the events, newest first, with their type, time, and notes', async () => {
+  stubApi()
+
+  renderPanel()
+
+  const events = await screen.findAllByRole('listitem')
+  expect(events).toHaveLength(2)
+  expect(events[0]).toHaveTextContent('Annual check')
+  expect(events[0]).toHaveTextContent('Checked')
+  expect(within(events[0]).getByText(/./, { selector: 'time' })).toHaveAttribute(
+    'datetime',
+    '2026-09-28T02:00:00Z',
+  )
+  expect(events[1]).toHaveTextContent('Installed new post')
+  expect(events[1]).toHaveTextContent('Concrete base poured')
+})
+
+it('says that an asset with no events is waiting for installation', async () => {
+  stubApi({ 'GET /api/assets/asset-1/events': { ok: true, body: [] } })
+
+  renderPanel()
+
+  expect(
+    await screen.findByText('No events yet. Add an Installed event when the Asset is in place.'),
+  ).toBeInTheDocument()
+})
+
+it('adds an event, shows it first, and tells the map the new status of the asset', async () => {
+  const added = { ...checked, id: 'event-3', type: 'Repaired', title: 'Replaced lamp', version: 20 }
+  const fetchMock = stubApi({
+    'POST /api/assets/asset-1/events': { ok: true, status: 201, body: added },
+  })
+  const { onChanged } = renderPanel()
+  await screen.findByText('Annual check')
+  events = [added, checked, installed]
+
+  await userEvent.click(screen.getByRole('button', { name: 'Add event' }))
+  await userEvent.selectOptions(screen.getByLabelText('Type'), 'Repaired')
+  await userEvent.type(screen.getByLabelText('Title'), 'Replaced lamp')
+  await userEvent.click(screen.getByRole('button', { name: 'Add Event' }))
+
+  const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST')!
+  expect(JSON.parse(post[1]!.body as string)).toMatchObject({
+    type: 'Repaired',
+    title: 'Replaced lamp',
+    notes: null,
+  })
+  expect((await screen.findAllByRole('listitem'))[0]).toHaveTextContent('Replaced lamp')
+  expect(onChanged).toHaveBeenCalledWith({ ...pole, status: 'InService' })
+  expect(screen.queryByLabelText('Title')).not.toBeInTheDocument()
+})
+
+it('shows why the API refused an event and keeps the form open', async () => {
+  stubApi({
+    'POST /api/assets/asset-1/events': {
+      ok: false,
+      status: 409,
+      body: { title: 'The Asset was removed. Add an Installed Event before any other Event.' },
+    },
+  })
+  renderPanel()
+  await screen.findByText('Annual check')
+
+  await userEvent.click(screen.getByRole('button', { name: 'Add event' }))
+  await userEvent.type(screen.getByLabelText('Title'), 'Looked at it')
+  await userEvent.click(screen.getByRole('button', { name: 'Add Event' }))
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('The Asset was removed.')
+  expect(screen.getByLabelText('Title')).toHaveValue('Looked at it')
+})
+
+it('corrects an event and sends the version that it read', async () => {
+  const corrected = { ...checked, title: 'Annual check, passed', version: 13 }
+  const fetchMock = stubApi({
+    'PUT /api/assets/asset-1/events/event-2': { ok: true, body: corrected },
+  })
+  renderPanel()
+  const first = (await screen.findAllByRole('listitem'))[0]
+  events = [corrected, installed]
+
+  await userEvent.click(within(first).getByRole('button', { name: 'Edit' }))
+  const title = screen.getByLabelText('Title')
+  await userEvent.clear(title)
+  await userEvent.type(title, 'Annual check, passed')
+  await userEvent.click(screen.getByRole('button', { name: 'Save Event' }))
+
+  const put = fetchMock.mock.calls.find(([, init]) => init?.method === 'PUT')!
+  expect(JSON.parse(put[1]!.body as string)).toMatchObject({
+    type: 'Checked',
+    title: 'Annual check, passed',
+    version: 12,
+  })
+  expect(await screen.findByText('Annual check, passed')).toBeInTheDocument()
+})
+
+it('closes on request', async () => {
+  stubApi()
+  const { onClose } = renderPanel()
+  await screen.findByText('Annual check')
+
+  await userEvent.click(screen.getByRole('button', { name: 'Close' }))
+
+  expect(onClose).toHaveBeenCalled()
+})
+
+it('shows the photos of an event and lets the user open one in full', async () => {
+  stubApi()
+
+  renderPanel()
+
+  const photo = await screen.findByRole('img', { name: 'Photo of Installed new post' })
+  expect(photo).toHaveAttribute('src', 'https://s3.test/read/1')
+  expect(photo.closest('a')).toHaveAttribute('href', 'https://s3.test/read/1')
+})
+
+it('uploads the photos of a new event straight to the storage link and shows them', async () => {
+  const added = { ...checked, id: 'event-3', title: 'Replaced lamp', version: 20 }
+  const withPhoto = {
+    ...added,
+    images: [
+      { id: 'image-9', contentType: 'image/png', sizeBytes: 4, readUrl: 'https://s3.test/read/9' },
+    ],
+  }
+  const fetchMock = stubApi({
+    'POST /api/assets/asset-1/events': { ok: true, status: 201, body: added },
+    'POST /api/assets/asset-1/events/event-3/images': {
+      ok: true,
+      status: 201,
+      body: { id: 'image-9', uploadUrl: 'https://s3.test/upload/9', contentType: 'image/png' },
+    },
+    'PUT https://s3.test/upload/9': { ok: true, body: {} },
+  })
+  renderPanel()
+  await screen.findByText('Annual check')
+  events = [withPhoto, checked, installed]
+
+  await userEvent.click(screen.getByRole('button', { name: 'Add event' }))
+  await userEvent.type(screen.getByLabelText('Title'), 'Replaced lamp')
+  const file = new File(['abcd'], 'lamp.png', { type: 'image/png' })
+  await userEvent.upload(screen.getByLabelText('Photos'), file)
+  await userEvent.click(screen.getByRole('button', { name: 'Add Event' }))
+
+  expect(await screen.findByRole('img', { name: 'Photo of Replaced lamp' })).toBeInTheDocument()
+  const asked = fetchMock.mock.calls.find(
+    ([url]) => url === '/api/assets/asset-1/events/event-3/images',
+  )!
+  expect(JSON.parse(asked[1]!.body as string)).toEqual({ contentType: 'image/png', sizeBytes: 4 })
+  const upload = fetchMock.mock.calls.find(([url]) => url === 'https://s3.test/upload/9')!
+  // The storage link is signed already, so the call must not carry the API token.
+  expect(upload[1]).toEqual({ method: 'PUT', headers: { 'Content-Type': 'image/png' }, body: file })
+})
+
+it('says which photo could not be uploaded and keeps the event that was saved', async () => {
+  const added = { ...checked, id: 'event-3', title: 'Replaced lamp', version: 20 }
+  stubApi({
+    'POST /api/assets/asset-1/events': { ok: true, status: 201, body: added },
+    'POST /api/assets/asset-1/events/event-3/images': {
+      ok: false,
+      status: 409,
+      body: { title: 'An Event holds 5 images at most. Remove one first.' },
+    },
+  })
+  renderPanel()
+  await screen.findByText('Annual check')
+  events = [added, checked, installed]
+
+  await userEvent.click(screen.getByRole('button', { name: 'Add event' }))
+  await userEvent.type(screen.getByLabelText('Title'), 'Replaced lamp')
+  await userEvent.upload(
+    screen.getByLabelText('Photos'),
+    new File(['abcd'], 'lamp.png', { type: 'image/png' }),
+  )
+  await userEvent.click(screen.getByRole('button', { name: 'Add Event' }))
+
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'lamp.png could not be uploaded. An Event holds 5 images at most.',
+  )
+  expect(screen.getByText('Replaced lamp')).toBeInTheDocument()
+})
+
+it('removes a photo from an event', async () => {
+  const fetchMock = stubApi({
+    'DELETE /api/assets/asset-1/events/event-1/images/image-1': {
+      ok: true,
+      status: 204,
+      body: undefined,
+    },
+  })
+  renderPanel()
+  await screen.findByRole('img', { name: 'Photo of Installed new post' })
+  events = [checked, { ...installed, images: [] }]
+
+  await userEvent.click(
+    screen.getByRole('button', { name: 'Remove photo 1 of 1 from Installed new post' }),
+  )
+
+  await waitFor(() => expect(screen.queryByRole('img')).not.toBeInTheDocument())
+  expect(fetchMock).toHaveBeenCalledWith(
+    '/api/assets/asset-1/events/event-1/images/image-1',
+    expect.objectContaining({ method: 'DELETE' }),
+  )
+})
+
+const retagged = {
+  ...pole,
+  friendlyId: 'OT-LP-00001',
+  areaCode: 'OT',
+  needsRetag: true,
+  formerFriendlyIds: ['MN-LP-00001'],
+}
+
+it('shows the friendly ids that the asset had before', async () => {
+  stubApi()
+
+  renderPanel(vi.fn(), vi.fn(), { ...retagged, needsRetag: false })
+
+  expect(screen.getByText('Was MN-LP-00001')).toBeInTheDocument()
+  await screen.findByText('Annual check')
+})
+
+it('asks someone to fit the new tag until they say it is fitted', async () => {
+  const fetchMock = stubApi({
+    'POST /api/assets/asset-1/retagged': { ok: true, body: { ...retagged, needsRetag: false } },
+  })
+  const { onChanged } = renderPanel(vi.fn(), vi.fn(), retagged)
+  await screen.findByText('Annual check')
+  expect(screen.getByRole('status')).toHaveTextContent('Fit the new tag OT-LP-00001')
+
+  await userEvent.click(screen.getByRole('button', { name: 'Tag fitted' }))
+
+  expect(fetchMock).toHaveBeenCalledWith(
+    '/api/assets/asset-1/retagged',
+    expect.objectContaining({ method: 'POST' }),
+  )
+  expect(onChanged).toHaveBeenCalledWith({ ...retagged, needsRetag: false })
+})
+
+it('does not ask for a new tag when none is needed', async () => {
+  stubApi()
+
+  renderPanel()
+
+  await screen.findByText('Annual check')
+  expect(screen.queryByRole('button', { name: 'Tag fitted' })).not.toBeInTheDocument()
+})
+
+it('lets the user start a move', async () => {
+  stubApi()
+  const { onMove } = renderPanel()
+  await screen.findByText('Annual check')
+
+  await userEvent.click(screen.getByRole('button', { name: 'Move' }))
+
+  expect(onMove).toHaveBeenCalled()
+})
+
+it('shows who changed what and when', async () => {
+  stubApi({
+    'GET /api/assets/asset-1/history': {
+      ok: true,
+      body: [
+        {
+          entityType: 'Asset',
+          entityId: 'asset-1',
+          operation: 'Updated',
+          field: 'FriendlyId',
+          oldValue: 'MN-LP-00001',
+          newValue: 'OT-LP-00001',
+          changedBy: 'user-2',
+          changedByName: 'Grace Hopper',
+          changedAt: '2026-10-02T03:00:00Z',
+        },
+        {
+          entityType: 'AssetEvent',
+          entityId: 'event-1',
+          operation: 'Created',
+          field: 'Title',
+          oldValue: null,
+          newValue: 'Installed new post',
+          changedBy: 'user-3',
+          changedByName: null,
+          changedAt: '2026-09-20T01:00:00Z',
+        },
+      ],
+    },
+  })
+  renderPanel()
+  await screen.findByText('Annual check')
+
+  await userEvent.click(screen.getByRole('button', { name: 'History' }))
+
+  const rows = await screen.findAllByRole('listitem')
+  expect(rows[0]).toHaveTextContent('Asset FriendlyId changed from MN-LP-00001 to OT-LP-00001')
+  expect(rows[0]).toHaveTextContent('Grace Hopper')
+  expect(rows[1]).toHaveTextContent('Event Title set to Installed new post')
+  expect(rows[1]).toHaveTextContent('user-3')
+  await userEvent.click(screen.getByRole('button', { name: 'Events' }))
+  expect(screen.getByText('Annual check')).toBeInTheDocument()
+})
+
+it('sends the newest version when the user saves again after the API refused a stale one', async () => {
+  const newer = { ...checked, title: 'Checked by someone else', version: 13 }
+  let putCount = 0
+  const fetchMock = stubApi()
+  fetchMock.mockImplementation(async (url: string, init: RequestInit = {}) => {
+    const key = `${init.method ?? 'GET'} ${url}`
+    if (key === 'GET /api/assets/asset-1/events')
+      return { ok: true, status: 200, json: async () => events }
+    if (key === 'PUT /api/assets/asset-1/events/event-2') {
+      putCount += 1
+      return putCount === 1
+        ? {
+            ok: false,
+            status: 409,
+            json: async () => ({ title: 'Someone else changed this Event.' }),
+          }
+        : { ok: true, status: 200, json: async () => newer }
+    }
+    if (key === 'GET /api/assets/asset-1') return { ok: true, status: 200, json: async () => pole }
+    return { ok: false, status: 404, json: async () => ({}) }
+  })
+  renderPanel()
+  const first = (await screen.findAllByRole('listitem'))[0]
+  await userEvent.click(within(first).getByRole('button', { name: 'Edit' }))
+  await userEvent.type(screen.getByLabelText('Title'), '!')
+  events = [newer, installed]
+
+  await userEvent.click(screen.getByRole('button', { name: 'Save Event' }))
+  await screen.findByRole('alert')
+  expect(screen.getByLabelText('Title')).toHaveValue('Annual check!')
+  await userEvent.click(screen.getByRole('button', { name: 'Save Event' }))
+
+  const puts = fetchMock.mock.calls.filter(([, init]) => init?.method === 'PUT')
+  expect(JSON.parse(puts[1][1]!.body as string).version).toBe(13)
+})
+
+it('does not add the same event twice when only the refresh after the save fails', async () => {
+  const fetchMock = stubApi({
+    'POST /api/assets/asset-1/events': { ok: true, status: 201, body: checked },
+    'GET /api/assets/asset-1': { ok: false, status: 503, body: {} },
+  })
+  renderPanel()
+  await screen.findByText('Annual check')
+
+  await userEvent.click(screen.getByRole('button', { name: 'Add event' }))
+  await userEvent.type(screen.getByLabelText('Title'), 'Looked at it')
+  await userEvent.click(screen.getByRole('button', { name: 'Add Event' }))
+
+  expect(await screen.findByRole('button', { name: 'Add event' })).toBeInTheDocument()
+  expect(screen.queryByLabelText('Title')).not.toBeInTheDocument()
+  expect(await screen.findByRole('alert')).toHaveTextContent('503')
+  expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1)
+})
+
+it('tries every photo and names each one that could not be uploaded', async () => {
+  const added = { ...checked, id: 'event-3', title: 'Replaced lamp', version: 20 }
+  const fetchMock = stubApi({
+    'POST /api/assets/asset-1/events': { ok: true, status: 201, body: added },
+    'POST /api/assets/asset-1/events/event-3/images': {
+      ok: false,
+      status: 409,
+      body: { title: 'The photo was refused.' },
+    },
+  })
+  renderPanel()
+  await screen.findByText('Annual check')
+  events = [added, checked, installed]
+
+  await userEvent.click(screen.getByRole('button', { name: 'Add event' }))
+  await userEvent.type(screen.getByLabelText('Title'), 'Replaced lamp')
+  await userEvent.upload(screen.getByLabelText('Photos'), [
+    new File(['abcd'], 'one.png', { type: 'image/png' }),
+    new File(['abcd'], 'two.png', { type: 'image/png' }),
+  ])
+  await userEvent.click(screen.getByRole('button', { name: 'Add Event' }))
+
+  const alert = await screen.findByRole('alert')
+  expect(alert).toHaveTextContent('one.png could not be uploaded.')
+  expect(alert).toHaveTextContent('two.png could not be uploaded.')
+  const asks = fetchMock.mock.calls.filter(
+    ([url]) => url === '/api/assets/asset-1/events/event-3/images',
+  )
+  expect(asks).toHaveLength(2)
+})
+
+it('loads photos only when they scroll into view', async () => {
+  stubApi()
+
+  renderPanel()
+
+  expect(await screen.findByRole('img', { name: 'Photo of Installed new post' })).toHaveAttribute(
+    'loading',
+    'lazy',
+  )
+})
+
+it('tells each remove button apart by its photo and event', async () => {
+  const twoPhotos = {
+    ...installed,
+    images: [
+      { id: 'image-1', contentType: 'image/png', sizeBytes: 4, readUrl: 'https://s3.test/read/1' },
+      { id: 'image-2', contentType: 'image/png', sizeBytes: 4, readUrl: 'https://s3.test/read/2' },
+    ],
+  }
+  events = [checked, twoPhotos]
+  stubApi()
+
+  renderPanel()
+
+  expect(
+    await screen.findByRole('button', { name: 'Remove photo 1 of 2 from Installed new post' }),
+  ).toBeInTheDocument()
+  expect(
+    screen.getByRole('button', { name: 'Remove photo 2 of 2 from Installed new post' }),
+  ).toBeInTheDocument()
+})

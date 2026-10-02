@@ -8,6 +8,7 @@ api:
   replicas: 2
   port: 8080
   migrateOnStartup: true
+  roleArn: '' # IAM role that the API pod assumes on EKS to reach the photo bucket. Empty uses no role.
 
 web:
   image:
@@ -21,14 +22,17 @@ database:
   port: 5432
   name: frongle
   ssl: true # Use TLS to reach the database. Turn off for the in-cluster Postgres.
-  existingSecret: '' # Secret with the keys "username" and "password". Required when postgres.enabled is false.
+  existingSecret: '' # Secret with the keys "username" and "password" of the database owner, who runs the migrations. Required when postgres.enabled is false.
+  appExistingSecret: '' # Secret with the keys "username" and "password" of a role that is not a superuser and has NOBYPASSRLS, which serves requests. Required when postgres.enabled is false.
 
 # In-cluster Postgres for local work. Prod uses RDS instead.
 postgres:
   enabled: false
-  image: postgres:17-alpine
+  image: imresamu/postgis:17-3.5-bookworm
   username: frongle
   password: ''
+  appUsername: frongle_app
+  appPassword: ''
 
 keycloak:
   instances: 2
@@ -46,3 +50,18 @@ ingress:
     secretName: frongle-tls
     clusterIssuer: letsencrypt
     email: '' # Let's Encrypt contact address. Required when tls.enabled is true.
+
+# Where Event photos live. The API signs links, and the browser sends and reads the photos directly.
+storage:
+  bucket: '' # Required.
+  region: us-east-1
+  serviceUrl: '' # Address of an S3-compatible server such as MinIO. Empty uses Amazon S3.
+
+# MinIO stands in for S3 in the local cluster. It sits behind the ingress at its own host name, because a
+# pre-signed link covers the host and the path, and a path prefix would change the path.
+minio:
+  enabled: false
+  image: cgr.dev/chainguard/minio:latest
+  host: storage.localhost
+  accessKey: frongle
+  secretKey: '' # Required when minio.enabled is true.
