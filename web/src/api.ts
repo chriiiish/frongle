@@ -96,6 +96,8 @@ export function createApi(token: string | undefined) {
     listAreas: () => call<Area[]>(token, '/api/areas'),
     listAssets: ({ west, south, east, north }: Bounds) =>
       call<Asset[]>(token, `/api/assets?west=${west}&south=${south}&east=${east}&north=${north}`),
+    createArea: (code: string, name: string, boundary: Boundary) =>
+      call<Area>(token, '/api/areas', { method: 'POST', body: { code, name, boundary } }),
     getAsset: (id: string) => call<Asset>(token, `/api/assets/${id}`),
     listEvents: (assetId: string) => call<AssetEvent[]>(token, `/api/assets/${assetId}/events`),
     addEvent: (assetId: string, draft: EventDraft) =>

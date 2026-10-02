@@ -121,3 +121,17 @@ it('keeps Tab and Shift+Tab inside the dialog', async () => {
   await userEvent.tab({ shift: true })
   expect(add).toHaveFocus()
 })
+
+it('cannot be closed while the asset is being saved, so that the answer cannot change a later dialog', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() => new Promise(() => {})),
+  )
+  const { onCancel } = renderDialog()
+  await userEvent.click(screen.getByRole('button', { name: 'Add Asset' }))
+
+  expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Close' })).toBeDisabled()
+  await userEvent.keyboard('{Escape}')
+  expect(onCancel).not.toHaveBeenCalled()
+})
