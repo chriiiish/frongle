@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { type Asset, type AssetType } from './api'
 import { useApi } from './useApi'
+import { useModalFocus } from './useModalFocus'
 
 const ASSET_TYPES: { value: AssetType; label: string }[] = [
   { value: 'LightPost', label: 'Light-post' },
@@ -29,6 +30,7 @@ export function NewAssetDialog({
   const [type, setType] = useState<AssetType>('LightPost')
   const [saving, setSaving] = useState(false)
   const [problem, setProblem] = useState<string>()
+  const dialog = useModalFocus<HTMLDivElement>(onCancel)
 
   async function add(event: FormEvent) {
     event.preventDefault()
@@ -45,6 +47,8 @@ export function NewAssetDialog({
   return (
     <>
       <div
+        ref={dialog}
+        tabIndex={-1}
         className="modal d-block"
         role="dialog"
         aria-modal="true"

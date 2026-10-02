@@ -7,6 +7,15 @@ stringData:
   username: {{ .Values.postgres.username | quote }}
   password: {{ required "postgres.password is required when postgres.enabled is true" .Values.postgres.password | quote }}
 ---
+# The API serves requests as this role. It is not a superuser and cannot bypass row-level security.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ .Release.Name }}-db-app
+stringData:
+  username: {{ .Values.postgres.appUsername | quote }}
+  password: {{ required "postgres.appPassword is required when postgres.enabled is true" .Values.postgres.appPassword | quote }}
+---
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -14,6 +23,12 @@ metadata:
 data:
   create-keycloak-database.sql: |
     CREATE DATABASE keycloak;
+  create-app-role.sql: |
+    CREATE ROLE {{ .Values.postgres.appUsername }} LOGIN PASSWORD '{{ .Values.postgres.appPassword }}' NOSUPERUSER NOBYPASSRLS;
+    ALTER DEFAULT PRIVILEGES FOR ROLE {{ .Values.postgres.username }} IN SCHEMA public
+      GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO {{ .Values.postgres.appUsername }};
+    ALTER DEFAULT PRIVILEGES FOR ROLE {{ .Values.postgres.username }} IN SCHEMA public
+      GRANT USAGE, SELECT ON SEQUENCES TO {{ .Values.postgres.appUsername }};
 ---
 apiVersion: apps/v1
 kind: StatefulSet

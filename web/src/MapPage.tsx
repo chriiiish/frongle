@@ -1,5 +1,5 @@
 import 'leaflet/dist/leaflet.css'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   CircleMarker,
   MapContainer,
@@ -90,6 +90,8 @@ export function MapPage() {
   const selected = assets.find((asset) => asset.id === selectedId)
   const [areasProblem, setAreasProblem] = useState<string>()
   const [assetsProblem, setAssetsProblem] = useState<string>()
+  // Counts the Assets that the user added, so that a list request that began before one cannot answer without it.
+  const additions = useRef(0)
   const zoomedIn = view !== undefined && view.zoom >= MIN_ASSET_ZOOM
 
   useEffect(() => {
@@ -111,18 +113,17 @@ export function MapPage() {
     if (!view || !zoomedIn) return
     // A slow answer for an earlier view must not replace the Assets of the view the user sees now.
     let current = true
-    const timer = setTimeout(
-      () =>
-        api.listAssets(view.bounds).then(
-          (listed) => {
-            if (!current) return
-            setAssets(listed)
-            setAssetsProblem(undefined)
-          },
-          (failure: Error) => current && setAssetsProblem(failure.message),
-        ),
-      MOVE_DELAY_MS,
-    )
+    const timer = setTimeout(() => {
+      const addedBefore = additions.current
+      void api.listAssets(view.bounds).then(
+        (listed) => {
+          if (!current || addedBefore !== additions.current) return
+          setAssets(listed)
+          setAssetsProblem(undefined)
+        },
+        (failure: Error) => current && setAssetsProblem(failure.message),
+      )
+    }, MOVE_DELAY_MS)
     return () => {
       current = false
       clearTimeout(timer)
@@ -202,6 +203,7 @@ export function MapPage() {
         <NewAssetDialog
           location={adding}
           onCreated={(asset) => {
+            additions.current += 1
             setAssets((current) => [...current, asset])
             setAdded(asset.friendlyId)
             setAdding(undefined)
