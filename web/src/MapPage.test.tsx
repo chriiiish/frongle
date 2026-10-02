@@ -55,11 +55,13 @@ vi.mock('react-leaflet', () => ({
   CircleMarker: ({
     center,
     pathOptions,
+    eventHandlers,
     bubblingMouseEvents,
     children,
   }: {
     center: [number, number]
     pathOptions: { color: string }
+    eventHandlers?: { click: () => void }
     bubblingMouseEvents?: boolean
     children: ReactNode
   }) => (
@@ -67,6 +69,7 @@ vi.mock('react-leaflet', () => ({
       data-testid="asset"
       data-center={center.join(',')}
       data-color={pathOptions.color}
+      onClick={eventHandlers?.click}
       data-bubbling={String(bubblingMouseEvents)}
     >
       {children}
@@ -389,6 +392,27 @@ it('closes the dialog without adding anything when the user cancels', async () =
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
 })
 
+it('opens the history of an asset when the user clicks it', async () => {
+  const fetchMock = stubApi({ '/api/assets/asset-1/events': [] })
+  await renderMapPage()
+
+  await userEvent.click(await screen.findByTestId('asset'))
+
+  expect(await screen.findByRole('heading', { name: 'MN-LP-00001' })).toBeInTheDocument()
+  expect(fetchMock).toHaveBeenCalledWith('/api/assets/asset-1/events', expect.anything())
+})
+
+it('closes the history of an asset on request', async () => {
+  stubApi({ '/api/assets/asset-1/events': [] })
+  await renderMapPage()
+  await userEvent.click(await screen.findByTestId('asset'))
+  await screen.findByRole('heading', { name: 'MN-LP-00001' })
+
+  await userEvent.click(screen.getByRole('button', { name: 'Close' }))
+
+  expect(screen.queryByRole('heading', { name: 'MN-LP-00001' })).not.toBeInTheDocument()
+})
+
 it('does not pass a click on an asset through to the map, so that it does not open the add dialog', async () => {
   stubApi()
   await renderMapPage()
@@ -421,4 +445,23 @@ it('keeps a new asset on the map when a list request that began before it answer
   await act(async () => listAnswers[0]([]))
 
   expect(screen.getByTestId('asset')).toHaveTextContent('MN-SS-00001')
+})
+
+it('starts the panel afresh when the user picks another asset', async () => {
+  const second = { ...pole, id: 'asset-2', friendlyId: 'MN-LP-00002', latitude: -37.046 }
+  stubApi({
+    '/api/assets': [pole, second],
+    '/api/assets/asset-1/events': [],
+    '/api/assets/asset-2/events': [],
+  })
+  await renderMapPage()
+  const markers = await screen.findAllByTestId('asset')
+  await userEvent.click(markers[0])
+  await userEvent.click(await screen.findByRole('button', { name: 'Add event' }))
+  expect(screen.getByLabelText('Title')).toBeInTheDocument()
+
+  await userEvent.click(markers[1])
+
+  expect(await screen.findByRole('heading', { name: 'MN-LP-00002' })).toBeInTheDocument()
+  expect(screen.queryByLabelText('Title')).not.toBeInTheDocument()
 })
