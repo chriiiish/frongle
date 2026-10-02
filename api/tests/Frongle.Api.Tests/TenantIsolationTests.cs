@@ -59,6 +59,17 @@ public sealed class TenantIsolationTests(PostgresFixture database) : IDisposable
         Assert.Equal(PostgresErrorCodes.InsufficientPrivilege, refused.SqlState);
     }
 
+    [Fact]
+    public async Task Postgres_refuses_to_write_a_row_when_the_caller_has_no_tenant()
+    {
+        await using var connection = await OpenAs("");
+
+        var refused = await Assert.ThrowsAsync<PostgresException>(() =>
+            Execute(connection, "INSERT INTO probe_notes VALUES (gen_random_uuid(), '', 'nobody pole')"));
+
+        Assert.Equal(PostgresErrorCodes.InsufficientPrivilege, refused.SqlState);
+    }
+
     private static string NewTenant() => $"tenant-{Guid.NewGuid():N}";
 
     private async Task<NpgsqlConnection> OpenAs(string tenant)
