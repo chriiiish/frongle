@@ -63,3 +63,8 @@ h6 {
     border-radius: 0.5rem;
   }
 }
+
+/* Leaflet panes sit at z-index 400 to 700, so a notice over the map must sit above them. */
+.map-notice {
+  z-index: 1000;
+}
