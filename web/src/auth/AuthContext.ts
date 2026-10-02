@@ -12,6 +12,8 @@ export interface Auth {
   token: string | undefined
   accountUrl: string | undefined
   profile: Profile | undefined
+  /** The Keycloak roles of the user, such as maintenance-manager and work-team. */
+  roles: string[]
   logout: () => void
   refresh: () => Promise<void>
   changePassword: () => void

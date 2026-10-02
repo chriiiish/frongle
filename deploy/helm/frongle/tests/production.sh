@@ -5,7 +5,7 @@ set -euo pipefail
 CHART="$(cd "$(dirname "$0")/.." && pwd)"
 fail() { echo "FAIL: $1" >&2; exit 1; }
 
-prod="$(helm template frongle "$CHART" -f "$CHART/values-production.yaml" --set database.host=db.example --set ingress.tls.email=ops@example.com)"
+prod="$(helm template frongle "$CHART" -f "$CHART/values-production.yaml" --set database.host=db.example --set ingress.tls.email=ops@example.com --set storage.bucket=images)"
 
 # The API reads metadata from the in-cluster http:// address, so it must not demand HTTPS there.
 grep -A1 'name: Authentication__RequireHttpsMetadata' <<<"$prod" | grep -q 'value: "false"' \

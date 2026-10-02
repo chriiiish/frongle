@@ -24,6 +24,18 @@ public sealed class PostgresFixture : IAsyncLifetime
         Password = AppPassword,
     }.ConnectionString;
 
+    /// <summary>Creates a database that has no tables, so a test can watch the API build the schema.</summary>
+    /// <returns>A connection string for the owner of the container, who can create tables.</returns>
+    public async Task<string> CreateEmptyDatabase()
+    {
+        var name = $"empty_{Guid.NewGuid():N}";
+        await using var connection = new NpgsqlConnection(_container.GetConnectionString());
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand($"CREATE DATABASE {name}", connection);
+        await command.ExecuteNonQueryAsync();
+        return new NpgsqlConnectionStringBuilder(_container.GetConnectionString()) { Database = name }.ConnectionString;
+    }
+
     public async Task InitializeAsync()
     {
         await _container.StartAsync();
@@ -41,13 +53,6 @@ public sealed class PostgresFixture : IAsyncLifetime
     }
 
     public async Task DisposeAsync() => await _container.DisposeAsync();
-
-    private sealed class NoCaller : ICaller
-    {
-        public string? TenantId => null;
-        public string? UserId => null;
-        public string? Name => null;
-    }
 }
 
 [CollectionDefinition(Name)]

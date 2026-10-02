@@ -75,3 +75,27 @@ run "the_cluster_has_the_add_ons_that_nodes_need" {
     error_message = "The cluster needs the vpc-cni, kube-proxy, and coredns add-ons."
   }
 }
+
+run "the_photo_bucket_is_private_encrypted_and_tagged" {
+  command = plan
+
+  assert {
+    condition     = aws_s3_bucket.images.tags["area"] == "storage" && aws_iam_role.api.tags["area"] == "storage"
+    error_message = "The photo bucket and the API role need area=storage."
+  }
+
+  assert {
+    condition = alltrue([
+      aws_s3_bucket_public_access_block.images.block_public_acls,
+      aws_s3_bucket_public_access_block.images.block_public_policy,
+      aws_s3_bucket_public_access_block.images.ignore_public_acls,
+      aws_s3_bucket_public_access_block.images.restrict_public_buckets,
+    ])
+    error_message = "The photo bucket must block all public access."
+  }
+
+  assert {
+    condition     = alltrue([for rule in aws_s3_bucket_cors_configuration.images.cors_rule : length(rule.allowed_origins) == 1 && contains(rule.allowed_origins, "https://frongle.cjl.nz")])
+    error_message = "The photo bucket must allow uploads from the public address only."
+  }
+}

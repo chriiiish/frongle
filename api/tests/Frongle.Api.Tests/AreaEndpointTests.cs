@@ -127,6 +127,69 @@ public sealed class AreaEndpointTests(PostgresFixture database) : IDisposable
     }
 
     [Fact]
+    public async Task A_user_without_a_frongle_role_cannot_list_areas()
+    {
+        var response = await As("some-other-realm-role").GetAsync("/api/areas");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task A_manager_whose_token_has_a_blank_tenant_is_refused()
+    {
+        var response = await CreateArea(As(Manager, " "), "MN", "Manukau", Shapes.Square(174.85, -37.05));
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task A_missing_code_is_a_validation_problem_not_a_server_error()
+    {
+        var withNull = await As(Manager).PostAsJsonAsync("/api/areas", new { code = (string?)null, name = "Manukau", boundary = Shapes.Square(174.85, -37.05) });
+        var omitted = await As(Manager).PostAsJsonAsync("/api/areas", new { name = "Manukau", boundary = Shapes.Square(174.85, -37.05) });
+
+        Assert.Equal(HttpStatusCode.BadRequest, withNull.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, omitted.StatusCode);
+    }
+
+    [Fact]
+    public async Task A_boundary_with_an_empty_or_missing_ring_is_a_validation_problem()
+    {
+        var emptyRing = new { type = "Polygon", coordinates = new[] { Array.Empty<double[]>() } };
+        var missingRing = new { type = "Polygon", coordinates = new double[]?[][] { null! } };
+
+        foreach (var boundary in new object[] { emptyRing, missingRing })
+        {
+            var response = await CreateArea(As(Manager), "MN", "Manukau", boundary);
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        }
+    }
+
+    [Fact]
+    public async Task Two_managers_who_draw_overlapping_areas_at_once_save_only_one()
+    {
+        var attempts = Enumerable.Range(0, 6)
+            .Select(i => CreateArea(As(Manager), $"A{(char)('A' + i)}", $"Area {i}", Shapes.Square(174.85 + i * 0.001, -37.05)))
+            .ToArray();
+
+        var responses = await Task.WhenAll(attempts);
+
+        Assert.Equal(1, responses.Count(r => r.StatusCode == HttpStatusCode.Created));
+        Assert.All(responses.Where(r => r.StatusCode != HttpStatusCode.Created), r => Assert.Equal(HttpStatusCode.Conflict, r.StatusCode));
+    }
+
+    [Fact]
+    public async Task Two_managers_who_use_the_same_code_at_once_get_a_conflict_not_a_server_error()
+    {
+        var responses = await Task.WhenAll(
+            CreateArea(As(Manager), "MN", "Manukau", Shapes.Square(174.85, -37.05)),
+            CreateArea(As(Manager), "MN", "Another", Shapes.Square(175.5, -37.5)));
+
+        Assert.Equal(1, responses.Count(r => r.StatusCode == HttpStatusCode.Created));
+        Assert.Equal(1, responses.Count(r => r.StatusCode == HttpStatusCode.Conflict));
+    }
+
+    [Fact]
     public async Task A_maintenance_manager_changes_the_name_and_boundary_of_an_area_but_not_its_code()
     {
         await CreateArea(As(Manager), "MN", "Manukau", Shapes.Square(174.85, -37.05));
