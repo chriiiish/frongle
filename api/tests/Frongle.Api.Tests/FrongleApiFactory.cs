@@ -53,6 +53,7 @@ public class TestAuthHandler(
     public const string SchemeName = "Test";
     public const string TenantHeader = "X-Test-Tenant";
     public const string RolesHeader = "X-Test-Roles";
+    public const string SubjectHeader = "X-Test-Subject";
     public const string NameHeader = "X-Test-Name";
     public const string UsernameHeader = "X-Test-Username";
 
@@ -61,7 +62,8 @@ public class TestAuthHandler(
         if (!Request.Headers.TryGetValue(RolesHeader, out var roles))
             return Task.FromResult(AuthenticateResult.NoResult());
 
-        var claims = new List<Claim> { new(ClaimTypes.NameIdentifier, "test-user") };
+        var subject = Request.Headers.TryGetValue(SubjectHeader, out var sub) ? sub.ToString() : "test-user";
+        var claims = new List<Claim> { new(ClaimTypes.NameIdentifier, subject) };
         if (Request.Headers.TryGetValue(TenantHeader, out var tenant))
             claims.Add(new Claim("tenant_id", tenant.ToString()));
         if (Request.Headers.TryGetValue(NameHeader, out var name))

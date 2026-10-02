@@ -19,6 +19,7 @@ database:
 postgres:
   enabled: true
   password: local-only-password
+  appPassword: local-only-app-password
 
 keycloak:
   instances: 1
