@@ -65,6 +65,21 @@ public sealed class AuditTests(PostgresFixture database) : IDisposable
     }
 
     [Fact]
+    public async Task Deleting_a_record_audits_each_field_with_its_old_value_and_no_new_value()
+    {
+        var author = SignedInAs("user-1", "Ada Lovelace");
+        var id = await AddNote(author, "leaning pole");
+
+        var remover = SignedInAs("user-2", "Grace Hopper");
+        await remover.DeleteAsync($"/probe/notes/{id}");
+
+        var deletion = Assert.Single(await AuditSeenBy(author), a => a.Operation == AuditOperation.Deleted);
+        Assert.Equal(("ProbeNote", id.ToString(), "Text"), (deletion.EntityType, deletion.EntityId, deletion.Field));
+        Assert.Equal(("leaning pole", null), (deletion.OldValue, deletion.NewValue));
+        Assert.Equal(("user-2", "Grace Hopper", _tenant), (deletion.ChangedBy, deletion.ChangedByName, deletion.TenantId));
+    }
+
+    [Fact]
     public async Task Saving_a_record_without_a_change_writes_no_audit_record()
     {
         var client = SignedInAs("user-1", "Ada Lovelace");

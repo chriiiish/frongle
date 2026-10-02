@@ -27,7 +27,8 @@ public sealed record GeoJsonPolygon(string Type, double[][][] Coordinates)
         problem = "";
 
         if (Type != "Polygon") return Fail("The boundary must be a GeoJSON Polygon.", out problem);
-        if (Coordinates is not { Length: > 0 }) return Fail("The boundary needs at least one ring.", out problem);
+        if (Coordinates is not { Length: > 0 } || Coordinates.Any(ring => ring is not { Length: > 0 }))
+            return Fail("The boundary needs at least one ring, and no ring can be empty.", out problem);
         if (Coordinates.SelectMany(ring => ring).Any(IsOffTheEarth))
             return Fail("Each position must be longitude (-180 to 180) then latitude (-90 to 90).", out problem);
 
@@ -44,10 +45,17 @@ public sealed record GeoJsonPolygon(string Type, double[][][] Coordinates)
         return polygon.IsValid ? true : Fail("The boundary must not cross itself.", out problem);
     }
 
+    /// <summary>Finds out whether a position is not a usable longitude and latitude.</summary>
+    /// <param name="position">The position to test, as longitude then latitude.</param>
+    /// <returns><see langword="true"/> when the position is missing, not a number, or outside the range of the Earth.</returns>
     private static bool IsOffTheEarth(double[] position) =>
         position is not { Length: >= 2 } || !double.IsFinite(position[0]) || !double.IsFinite(position[1])
         || Math.Abs(position[0]) > 180 || Math.Abs(position[1]) > 90;
 
+    /// <summary>Reports a problem and a failed result in one step, so that a check reads as one line.</summary>
+    /// <param name="message">What is wrong with the GeoJSON.</param>
+    /// <param name="problem">Set to <paramref name="message"/>.</param>
+    /// <returns>Always <see langword="false"/>.</returns>
     private static bool Fail(string message, out string problem)
     {
         problem = message;
