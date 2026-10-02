@@ -34,12 +34,20 @@ builder.Services.AddTransient<IClaimsTransformation, KeycloakRolesClaimsTransfor
 builder.Services.AddAuthorizationBuilder()
     .AddPolicy(AreaEndpoints.ManagerPolicy, policy => policy
         .RequireAuthenticatedUser()
-        .RequireClaim("tenant_id")
+        .RequireAssertion(HasTenant)
         .RequireRole(Roles.MaintenanceManager))
+    .AddPolicy(AreaEndpoints.ReaderPolicy, policy => policy
+        .RequireAuthenticatedUser()
+        .RequireAssertion(HasTenant)
+        .RequireRole(Roles.MaintenanceManager, Roles.WorkTeam))
     .SetFallbackPolicy(new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
         .RequireAuthenticatedUser()
-        .RequireAssertion(context => !string.IsNullOrWhiteSpace(context.User.FindFirstValue("tenant_id")))
+        .RequireAssertion(HasTenant)
         .Build());
+
+// A blank tenant would reach the database as an unusable tenant, so every policy refuses it.
+static bool HasTenant(Microsoft.AspNetCore.Authorization.AuthorizationHandlerContext context) =>
+    !string.IsNullOrWhiteSpace(context.User.FindFirstValue("tenant_id"));
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
