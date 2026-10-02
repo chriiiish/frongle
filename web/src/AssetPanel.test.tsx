@@ -291,7 +291,9 @@ it('removes a photo from an event', async () => {
   await screen.findByRole('img', { name: 'Photo of Installed new post' })
   events = [checked, { ...installed, images: [] }]
 
-  await userEvent.click(screen.getByRole('button', { name: 'Remove photo' }))
+  await userEvent.click(
+    screen.getByRole('button', { name: 'Remove photo 1 of 1 from Installed new post' }),
+  )
 
   await waitFor(() => expect(screen.queryByRole('img')).not.toBeInTheDocument())
   expect(fetchMock).toHaveBeenCalledWith(
@@ -352,4 +354,67 @@ it('does not add the same event twice when only the refresh after the save fails
   expect(screen.queryByLabelText('Title')).not.toBeInTheDocument()
   expect(await screen.findByRole('alert')).toHaveTextContent('503')
   expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1)
+})
+
+it('tries every photo and names each one that could not be uploaded', async () => {
+  const added = { ...checked, id: 'event-3', title: 'Replaced lamp', version: 20 }
+  const fetchMock = stubApi({
+    'POST /api/assets/asset-1/events': { ok: true, status: 201, body: added },
+    'POST /api/assets/asset-1/events/event-3/images': {
+      ok: false,
+      status: 409,
+      body: { title: 'The photo was refused.' },
+    },
+  })
+  renderPanel()
+  await screen.findByText('Annual check')
+  events = [added, checked, installed]
+
+  await userEvent.click(screen.getByRole('button', { name: 'Add event' }))
+  await userEvent.type(screen.getByLabelText('Title'), 'Replaced lamp')
+  await userEvent.upload(screen.getByLabelText('Photos'), [
+    new File(['abcd'], 'one.png', { type: 'image/png' }),
+    new File(['abcd'], 'two.png', { type: 'image/png' }),
+  ])
+  await userEvent.click(screen.getByRole('button', { name: 'Add Event' }))
+
+  const alert = await screen.findByRole('alert')
+  expect(alert).toHaveTextContent('one.png could not be uploaded.')
+  expect(alert).toHaveTextContent('two.png could not be uploaded.')
+  const asks = fetchMock.mock.calls.filter(
+    ([url]) => url === '/api/assets/asset-1/events/event-3/images',
+  )
+  expect(asks).toHaveLength(2)
+})
+
+it('loads photos only when they scroll into view', async () => {
+  stubApi()
+
+  renderPanel()
+
+  expect(await screen.findByRole('img', { name: 'Photo of Installed new post' })).toHaveAttribute(
+    'loading',
+    'lazy',
+  )
+})
+
+it('tells each remove button apart by its photo and event', async () => {
+  const twoPhotos = {
+    ...installed,
+    images: [
+      { id: 'image-1', contentType: 'image/png', sizeBytes: 4, readUrl: 'https://s3.test/read/1' },
+      { id: 'image-2', contentType: 'image/png', sizeBytes: 4, readUrl: 'https://s3.test/read/2' },
+    ],
+  }
+  events = [checked, twoPhotos]
+  stubApi()
+
+  renderPanel()
+
+  expect(
+    await screen.findByRole('button', { name: 'Remove photo 1 of 2 from Installed new post' }),
+  ).toBeInTheDocument()
+  expect(
+    screen.getByRole('button', { name: 'Remove photo 2 of 2 from Installed new post' }),
+  ).toBeInTheDocument()
 })

@@ -53,13 +53,11 @@ export function EventForm({
     )
     const room = photoSlots - photos.length
     setPhotos([...photos, ...usable.slice(0, room)])
-    if (usable.length < chosen.length) {
-      setPhotoProblem('Only JPEG, PNG, and WebP photos up to 10 MB are accepted.')
-    } else if (usable.length > room) {
-      setPhotoProblem(`An event holds ${MAX_PHOTOS} photos at most.`)
-    } else {
-      setPhotoProblem(undefined)
-    }
+    const problems = []
+    if (usable.length < chosen.length)
+      problems.push('Only JPEG, PNG, and WebP photos up to 10 MB are accepted.')
+    if (usable.length > room) problems.push(`An event holds ${MAX_PHOTOS} photos at most.`)
+    setPhotoProblem(problems.length > 0 ? problems.join(' ') : undefined)
   }
 
   function submit(event: FormEvent) {

@@ -101,13 +101,15 @@ export function AssetPanel({
 
   // The event is saved by now, so a photo that fails leaves the event in place and the user can add the photo again.
   async function attach(eventId: string, photos: File[]) {
+    const failed: string[] = []
     for (const photo of photos) {
       try {
         await api.attachPhoto(asset.id, eventId, photo)
       } catch (failure) {
-        return `${photo.name} could not be uploaded. ${(failure as Error).message}`
+        failed.push(`${photo.name} could not be uploaded. ${(failure as Error).message}`)
       }
     }
+    return failed.length > 0 ? failed.join(' ') : undefined
   }
 
   async function removePhoto(event: AssetEvent, image: EventImage) {
@@ -178,19 +180,20 @@ export function AssetPanel({
                 {event.notes && <p className="mb-0 mt-1">{event.notes}</p>}
                 {event.images.length > 0 && (
                   <div className="d-flex flex-wrap gap-2 mt-2">
-                    {event.images.map((image) => (
+                    {event.images.map((image, index) => (
                       <div className="position-relative" key={image.id}>
                         <a href={image.readUrl} target="_blank" rel="noreferrer">
                           <img
                             className="photo-thumb img-thumbnail"
                             src={image.readUrl}
+                            loading="lazy"
                             alt={`Photo of ${event.title}`}
                           />
                         </a>
                         <button
                           type="button"
                           className="btn-close btn-sm position-absolute top-0 end-0 m-1 bg-body"
-                          aria-label="Remove photo"
+                          aria-label={`Remove photo ${index + 1} of ${event.images.length} from ${event.title}`}
                           onClick={() => void removePhoto(event, image)}
                         />
                       </div>
