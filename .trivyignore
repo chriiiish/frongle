@@ -5,3 +5,7 @@ AWS-0040
 
 # Worker nodes need outbound access to pull images and reach AWS APIs through the NAT gateway.
 AWS-0104
+
+# Event photos use S3-managed AES-256 keys. A customer managed KMS key would add a monthly key fee and a request fee
+# for photos of street assets, which hold no personal data.
+AWS-0132
