@@ -63,3 +63,37 @@ h6 {
     border-radius: 0.5rem;
   }
 }
+
+/* Leaflet panes sit at z-index 400 to 700, so a notice over the map must sit above them. */
+.map-notice {
+  z-index: 1000;
+}
+
+/* On a phone the Asset panel is a sheet at the bottom of the map. On a wider screen it sits at the right. */
+.asset-panel {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1000;
+  max-height: 60dvh;
+  overflow-y: auto;
+}
+
+@media (min-width: 768px) {
+  .asset-panel {
+    top: 1rem;
+    right: 1rem;
+    bottom: 1rem;
+    left: auto;
+    width: 24rem;
+    max-height: none;
+    border-radius: 0.5rem;
+  }
+}
+
+.photo-thumb {
+  width: 5rem;
+  height: 5rem;
+  object-fit: cover;
+}

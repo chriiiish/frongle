@@ -18,11 +18,16 @@ function profileFrom(client: Keycloak): Profile | undefined {
   }
 }
 
+function rolesFrom(client: Keycloak): string[] {
+  return client.tokenParsed?.realm_access?.roles ?? []
+}
+
 export function KeycloakAuthProvider({ children }: { children: ReactNode }) {
   const [keycloak, setKeycloak] = useState<Keycloak>()
   const [authenticated, setAuthenticated] = useState(false)
   const [token, setToken] = useState<string>()
   const [profile, setProfile] = useState<Profile>()
+  const [roles, setRoles] = useState<string[]>([])
   const [accountUrl, setAccountUrl] = useState<string>()
 
   // React runs effects twice in development. A second init would take the sign-in code from the URL again and fail.
@@ -43,12 +48,14 @@ export function KeycloakAuthProvider({ children }: { children: ReactNode }) {
       client.onAuthRefreshSuccess = () => {
         setToken(client.token)
         setProfile(profileFrom(client))
+        setRoles(rolesFrom(client))
       }
       const isSignedIn = await client.init({ onLoad: 'login-required', pkceMethod: 'S256' })
       setAccountUrl(`${config.keycloakUrl.replace(/\/$/, '')}/realms/${config.realm}/account`)
       setKeycloak(client)
       setToken(client.token)
       setProfile(profileFrom(client))
+      setRoles(rolesFrom(client))
       setAuthenticated(isSignedIn)
     }
     void start()
@@ -60,6 +67,7 @@ export function KeycloakAuthProvider({ children }: { children: ReactNode }) {
       token,
       accountUrl,
       profile,
+      roles,
       logout: () => void keycloak?.logout(),
       // Keycloak has no account call that changes a password, so its own page does it and then returns here.
       changePassword: () => void keycloak?.login({ action: 'UPDATE_PASSWORD' }),
@@ -70,7 +78,7 @@ export function KeycloakAuthProvider({ children }: { children: ReactNode }) {
         if (keycloak) setProfile(profileFrom(keycloak))
       },
     }),
-    [keycloak, authenticated, token, accountUrl, profile],
+    [keycloak, authenticated, token, accountUrl, profile, roles],
   )
 
   return <AuthContext.Provider value={auth}>{children}</AuthContext.Provider>

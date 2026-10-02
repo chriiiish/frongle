@@ -3,7 +3,7 @@
 set -euo pipefail
 
 CHART="$(cd "$(dirname "$0")/.." && pwd)"
-PROD=(-f "$CHART/values-production.yaml" --set database.host=db.example --set ingress.tls.email=ops@example.com)
+PROD=(-f "$CHART/values-production.yaml" --set database.host=db.example --set ingress.tls.email=ops@example.com --set storage.bucket=images)
 
 fail() { echo "FAIL: $1" >&2; exit 1; }
 render() { helm template frongle "$CHART" "$@"; }
