@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+using Frongle.Api.Auth;
 using Frongle.Api.Data;
 using Frongle.Domain;
 using Microsoft.EntityFrameworkCore;
@@ -8,9 +10,14 @@ namespace Frongle.Api.Assets;
 /// <param name="Type">The kind of Event.</param>
 /// <param name="Title">A short line that says what happened. It cannot be blank.</param>
 /// <param name="Notes">More detail, or <see langword="null"/> when there is none.</param>
-/// <param name="OccurredAt">When it happened. It cannot be in the future.</param>
+/// <param name="OccurredAt">When it happened. It cannot be more than five minutes in the future, which allows for a phone clock that runs a little fast.</param>
 /// <param name="Version">When the caller corrects an Event, the version that the caller read. The API ignores it when the caller adds an Event.</param>
-public sealed record EventRequest(EventType Type, string Title, string? Notes, DateTimeOffset OccurredAt, uint Version = 0);
+public sealed record EventRequest(
+    [property: JsonRequired] EventType Type,
+    string Title,
+    string? Notes,
+    [property: JsonRequired] DateTimeOffset OccurredAt,
+    uint Version = 0);
 
 /// <summary>An Event as the API describes it.</summary>
 /// <param name="Id">The identifier of the Event.</param>
@@ -43,7 +50,7 @@ public static class EventEndpoints
     /// <returns>The same API, so that calls can be chained.</returns>
     public static IEndpointRouteBuilder MapEventEndpoints(this IEndpointRouteBuilder app)
     {
-        var events = app.MapGroup("/api/assets/{assetId:guid}/events").WithTags("Events");
+        var events = app.MapGroup("/api/assets/{assetId:guid}/events").WithTags("Events").RequireAuthorization(Policies.Reader);
 
         events.MapGet("/", ListEvents)
             .WithSummary("Show the history of an Asset")
@@ -70,6 +77,11 @@ public static class EventEndpoints
         return app;
     }
 
+    /// <summary>Lists the Events of an Asset with their images.</summary>
+    /// <param name="assetId">The Internal Id of the Asset.</param>
+    /// <param name="db">The database of the caller's tenant.</param>
+    /// <param name="storage">Makes the links to the image files.</param>
+    /// <returns>200 with the Events, newest first, or 404 when the tenant has no such Asset.</returns>
     private static async Task<IResult> ListEvents(Guid assetId, FrongleDbContext db, IImageStorage storage)
     {
         if (!await db.Assets.AnyAsync(a => a.Id == assetId)) return Results.NotFound();
@@ -82,6 +94,11 @@ public static class EventEndpoints
         return Results.Ok(events.Select(e => EventResponse.From(e, images[e.Id])));
     }
 
+    /// <summary>Records a new Event for an Asset.</summary>
+    /// <param name="assetId">The Internal Id of the Asset.</param>
+    /// <param name="request">What happened.</param>
+    /// <param name="db">The database of the caller's tenant.</param>
+    /// <returns>201 with the Event, 400 when the request is invalid, 404 when the tenant has no such Asset, or 409 when the Asset was removed and the Event is not an Installed Event.</returns>
     private static async Task<IResult> AddEvent(Guid assetId, EventRequest request, FrongleDbContext db)
     {
         if (Validate(request) is { } problems) return Results.ValidationProblem(problems);
@@ -104,6 +121,13 @@ public static class EventEndpoints
         return Results.Created($"/api/assets/{assetId}/events/{ev.Id}", EventResponse.From(ev, []));
     }
 
+    /// <summary>Corrects an Event that someone recorded earlier.</summary>
+    /// <param name="assetId">The Internal Id of the Asset that the Event belongs to.</param>
+    /// <param name="id">The Event to correct.</param>
+    /// <param name="request">The corrected Event, with the version that the caller read.</param>
+    /// <param name="db">The database of the caller's tenant.</param>
+    /// <param name="storage">Makes the links to the image files.</param>
+    /// <returns>200 with the Event, 400 when the request is invalid, 404 when the tenant has no such Event, or 409 when someone else changed it first.</returns>
     private static async Task<IResult> ChangeEvent(Guid assetId, Guid id, EventRequest request, FrongleDbContext db, IImageStorage storage)
     {
         if (Validate(request) is { } problems) return Results.ValidationProblem(problems);
@@ -129,6 +153,9 @@ public static class EventEndpoints
         return Results.Ok(EventResponse.From(ev, (await ImageEndpoints.ImagesOf(db, storage, [id]))[id]));
     }
 
+    /// <summary>Checks an Event request.</summary>
+    /// <param name="request">The request to check.</param>
+    /// <returns>What is wrong, by field name, or <see langword="null"/> when the request is valid.</returns>
     private static Dictionary<string, string[]>? Validate(EventRequest request)
     {
         var problems = new Dictionary<string, string[]>();

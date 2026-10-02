@@ -180,6 +180,37 @@ public sealed class AssetRetagTests(PostgresFixture database) : IDisposable
     }
 
     [Fact]
+    public async Task The_history_of_an_asset_includes_the_images_that_were_added_and_removed()
+    {
+        await GivenAreas();
+        var asset = await GivenAnAsset();
+        var created = await (await As(WorkTeam).PostAsJsonAsync($"/api/assets/{asset.Id}/events",
+            new { type = "Installed", title = "Installed", occurredAt = DateTimeOffset.UtcNow.AddHours(-1) })).Content.ReadFromJsonAsync<JsonElement>();
+        var eventPath = $"/api/assets/{asset.Id}/events/{created.GetProperty("id").GetGuid()}/images";
+        var upload = await (await As(WorkTeam).PostAsJsonAsync(eventPath, new { contentType = "image/png", sizeBytes = 10 })).Content.ReadFromJsonAsync<JsonElement>();
+        await As(WorkTeam).DeleteAsync($"{eventPath}/{upload.GetProperty("id").GetGuid()}");
+
+        var history = await As(Manager).GetFromJsonAsync<List<HistoryView>>($"/api/assets/{asset.Id}/history", Json);
+
+        var imageChanges = history!.Where(h => h.EntityType == "EventImage").ToList();
+        Assert.Contains(imageChanges, h => h.Operation == "Created");
+        Assert.Contains(imageChanges, h => h.Operation == "Updated" && h.Field == "RemovedAt");
+    }
+
+    [Fact]
+    public async Task Recording_a_fitted_tag_at_the_same_moment_never_fails_with_a_server_error()
+    {
+        await GivenAreas();
+        var asset = await GivenAnAsset();
+        await MoveOk(As(WorkTeam), asset, InOtara, Latitude);
+
+        var responses = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => As(WorkTeam).PostAsync($"/api/assets/{asset.Id}/retagged", null)));
+
+        Assert.All(responses, r => Assert.InRange((int)r.StatusCode, 200, 409));
+        Assert.Contains(responses, r => r.StatusCode == HttpStatusCode.OK);
+    }
+
+    [Fact]
     public async Task The_history_of_an_asset_of_another_tenant_finds_nothing()
     {
         await GivenAreas();

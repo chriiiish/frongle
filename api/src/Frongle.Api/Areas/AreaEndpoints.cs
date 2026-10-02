@@ -34,12 +34,6 @@ public sealed record AreaResponse(Guid Id, string Code, string Name, GeoJsonPoly
 /// <summary>The endpoints that list and manage Areas.</summary>
 public static partial class AreaEndpoints
 {
-    /// <summary>The name of the authorization policy that only Maintenance Managers meet.</summary>
-    public const string ManagerPolicy = "MaintenanceManager";
-
-    /// <summary>The name of the authorization policy that Maintenance Managers and Work Teams meet.</summary>
-    public const string ReaderPolicy = "AreaReader";
-
     /// <summary>Matches a valid Area code.</summary>
     /// <returns>A pattern that accepts exactly two capital letters.</returns>
     [GeneratedRegex("^[A-Z]{2}$")]
@@ -54,14 +48,14 @@ public static partial class AreaEndpoints
 
         areas.MapGet("/", async (FrongleDbContext db) =>
                 (await db.Areas.OrderBy(a => a.Code).ToListAsync()).Select(AreaResponse.From))
-            .RequireAuthorization(ReaderPolicy)
+            .RequireAuthorization(Policies.Reader)
             .WithSummary("List the Areas of your tenant")
             .WithDescription("Returns every Area with its code, name, and boundary. Maintenance Managers and Work Teams can both read it.")
             .Produces<IEnumerable<AreaResponse>>()
             .Produces(StatusCodes.Status403Forbidden);
 
         areas.MapPost("/", CreateArea)
-            .RequireAuthorization(ManagerPolicy)
+            .RequireAuthorization(Policies.Manager)
             .WithSummary("Add an Area")
             .WithDescription("Maintenance Managers only. The code must be two capital letters that no other Area of the tenant uses. The boundary must be a valid GeoJSON Polygon that does not overlap another Area. Sharing an edge is allowed.")
             .Produces<AreaResponse>(StatusCodes.Status201Created)
@@ -70,7 +64,7 @@ public static partial class AreaEndpoints
             .Produces(StatusCodes.Status403Forbidden);
 
         areas.MapPut("/{id:guid}", ChangeArea)
-            .RequireAuthorization(ManagerPolicy)
+            .RequireAuthorization(Policies.Manager)
             .WithSummary("Change the name and boundary of an Area")
             .WithDescription("Maintenance Managers only. The code cannot change. The new boundary must not overlap another Area and must keep every Asset of the Area inside it.")
             .Produces(StatusCodes.Status204NoContent)
@@ -80,7 +74,7 @@ public static partial class AreaEndpoints
             .Produces(StatusCodes.Status403Forbidden);
 
         areas.MapDelete("/{id:guid}", DeleteArea)
-            .RequireAuthorization(ManagerPolicy)
+            .RequireAuthorization(Policies.Manager)
             .WithSummary("Delete an Area")
             .WithDescription("Maintenance Managers only. An Area that has Assets cannot be deleted.")
             .Produces(StatusCodes.Status204NoContent)
@@ -104,7 +98,7 @@ public static partial class AreaEndpoints
             problems["code"] = ["The code must be two capital letters, for example MN."];
         if (problems.Count > 0) return Results.ValidationProblem(problems);
 
-        return await SerializedPerTenant(db, caller, async () =>
+        return await AdvisoryLock.Run(db, caller.TenantId!, async () =>
         {
             if (await db.Areas.AnyAsync(a => a.Code == code))
                 return Results.Conflict(new { title = $"Another Area already uses the code {code}." });
@@ -123,13 +117,13 @@ public static partial class AreaEndpoints
     /// <param name="change">The new name and boundary.</param>
     /// <param name="db">The database of the caller's tenant.</param>
     /// <param name="caller">The signed-in user, whose tenant the write is serialized for.</param>
-    /// <returns>204 when the Area changed, 400 when the request is invalid, 404 when the tenant has no such Area, or 409 when the boundary overlaps another Area.</returns>
+    /// <returns>204 when the Area changed, 400 when the request is invalid, 404 when the tenant has no such Area, or 409 when the boundary overlaps another Area or would leave an Asset of the Area outside it.</returns>
     private static async Task<IResult> ChangeArea(Guid id, AreaChange change, FrongleDbContext db, ICaller caller)
     {
         var problems = Validate(change.Name, change.Boundary, out var boundary);
         if (problems.Count > 0) return Results.ValidationProblem(problems);
 
-        return await SerializedPerTenant(db, caller, async () =>
+        return await AdvisoryLock.Run(db, caller.TenantId!, async () =>
         {
             var area = await db.Areas.SingleOrDefaultAsync(a => a.Id == id);
             if (area is null) return Results.NotFound();
@@ -149,18 +143,21 @@ public static partial class AreaEndpoints
     /// <summary>Deletes an Area.</summary>
     /// <param name="id">The Area to delete.</param>
     /// <param name="db">The database of the caller's tenant.</param>
-    /// <returns>204 when the Area was deleted, or 404 when the tenant has no such Area.</returns>
-    private static async Task<IResult> DeleteArea(Guid id, FrongleDbContext db)
-    {
-        var area = await db.Areas.SingleOrDefaultAsync(a => a.Id == id);
-        if (area is null) return Results.NotFound();
-        if (await db.Assets.AnyAsync(a => a.AreaId == id))
-            return Results.Conflict(new { title = "The Area has Assets, and their Friendly Ids use its code, so it cannot be deleted." });
+    /// <param name="caller">The signed-in user, whose tenant the write is serialized for.</param>
+    /// <returns>204 when the Area was deleted, 404 when the tenant has no such Area, or 409 when the Area still has Assets.</returns>
+    private static Task<IResult> DeleteArea(Guid id, FrongleDbContext db, ICaller caller) =>
+        // An Asset that is added at the same moment must not slip in between the check and the delete.
+        AdvisoryLock.Run(db, caller.TenantId!, async () =>
+        {
+            var area = await db.Areas.SingleOrDefaultAsync(a => a.Id == id);
+            if (area is null) return Results.NotFound();
+            if (await db.Assets.AnyAsync(a => a.AreaId == id))
+                return Results.Conflict(new { title = "The Area has Assets, and their Friendly Ids use its code, so it cannot be deleted." });
 
-        db.Areas.Remove(area);
-        await db.SaveChangesAsync();
-        return Results.NoContent();
-    }
+            db.Areas.Remove(area);
+            await db.SaveChangesAsync();
+            return Results.NoContent();
+        });
 
     /// <summary>Checks the parts of a request that both creating and changing an Area share.</summary>
     /// <param name="name">The name the caller gave the Area.</param>
@@ -193,24 +190,6 @@ public static partial class AreaEndpoints
             .Select(a => a.FriendlyId)
             .Take(20)
             .ToListAsync();
-
-    /// <summary>
-    /// Runs a check-then-write for one tenant at a time. The overlap check reads other Areas, so without this lock
-    /// two requests could both see no overlap and then both save. The lock ends with the transaction.
-    /// </summary>
-    /// <param name="db">The database to write to.</param>
-    /// <param name="caller">The signed-in user, whose tenant is the lock key.</param>
-    /// <param name="write">The check and the write, which run while the lock is held.</param>
-    /// <returns>What <paramref name="write"/> returned, after the transaction committed.</returns>
-    private static async Task<IResult> SerializedPerTenant(FrongleDbContext db, ICaller caller, Func<Task<IResult>> write)
-    {
-        await using var transaction = await db.Database.BeginTransactionAsync();
-        // Two tenants that hash to the same key only wait for each other, so a collision costs time and nothing else.
-        await db.Database.ExecuteSqlAsync($"SELECT pg_advisory_xact_lock(hashtext({caller.TenantId}))");
-        var result = await write();
-        await transaction.CommitAsync();
-        return result;
-    }
 
     /// <summary>Finds out whether a boundary overlaps any other Area. Areas that only share an edge do not overlap.</summary>
     /// <param name="db">The database of the caller's tenant.</param>
