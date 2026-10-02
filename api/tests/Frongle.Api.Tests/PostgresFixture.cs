@@ -15,6 +15,9 @@ public sealed class PostgresFixture : IAsyncLifetime
     private const string AppPassword = "frongle_app";
     private readonly PostgreSqlContainer _container = new PostgreSqlBuilder("imresamu/postgis:17-3.5-bookworm").Build();
 
+    /// <summary>The superuser login, which owns the tables and can create extensions.</summary>
+    public string OwnerConnectionString => _container.GetConnectionString();
+
     public string AppConnectionString => new NpgsqlConnectionStringBuilder(_container.GetConnectionString())
     {
         Username = AppRole,
@@ -37,8 +40,9 @@ public sealed class PostgresFixture : IAsyncLifetime
     {
         await _container.StartAsync();
 
-        var options = new DbContextOptionsBuilder<FrongleDbContext>().UseNpgsql(_container.GetConnectionString()).Options;
-        await using var owner = new FrongleDbContext(options, new NoCaller());
+        var options = new DbContextOptionsBuilder<FrongleDbContext>();
+        options.UseFrongleNpgsql(_container.GetConnectionString());
+        await using var owner = new FrongleDbContext(options.Options, new NoCaller());
         await owner.Database.MigrateAsync();
         await owner.Database.ExecuteSqlRawAsync(ProbeDbContext.CreateTable);
         await owner.Database.ExecuteSqlRawAsync(TenantSecurity.EnableRowLevelSecurity("probe_notes"));

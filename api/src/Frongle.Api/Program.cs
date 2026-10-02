@@ -1,11 +1,13 @@
 using System.Security.Claims;
 using Frongle.Api;
+using Frongle.Api.Areas;
 using Frongle.Api.Auth;
 using Frongle.Api.Data;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
+using Npgsql;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,7 +15,7 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICaller, HttpCaller>();
 builder.Services.AddScoped<TenantConnectionInterceptor>();
 builder.Services.AddDbContext<FrongleDbContext>((provider, options) => options
-    .UseNpgsql(builder.Configuration.GetConnectionString("Frongle"))
+    .UseFrongleNpgsql(builder.Configuration.GetConnectionString("Frongle"))
     .AddInterceptors(provider.GetRequiredService<TenantConnectionInterceptor>()));
 
 builder.Services.AddHealthChecks().AddDbContextCheck<FrongleDbContext>("database", tags: ["ready"]);
@@ -30,10 +32,22 @@ builder.Services
     });
 builder.Services.AddTransient<IClaimsTransformation, KeycloakRolesClaimsTransformation>();
 builder.Services.AddAuthorizationBuilder()
+    .AddPolicy(AreaEndpoints.ManagerPolicy, policy => policy
+        .RequireAuthenticatedUser()
+        .RequireAssertion(HasTenant)
+        .RequireRole(Roles.MaintenanceManager))
+    .AddPolicy(AreaEndpoints.ReaderPolicy, policy => policy
+        .RequireAuthenticatedUser()
+        .RequireAssertion(HasTenant)
+        .RequireRole(Roles.MaintenanceManager, Roles.WorkTeam))
     .SetFallbackPolicy(new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
         .RequireAuthenticatedUser()
-        .RequireAssertion(context => !string.IsNullOrWhiteSpace(context.User.FindFirstValue("tenant_id")))
+        .RequireAssertion(HasTenant)
         .Build());
+
+// A blank tenant would reach the database as an unusable tenant, so every policy refuses it.
+static bool HasTenant(Microsoft.AspNetCore.Authorization.AuthorizationHandlerContext context) =>
+    !string.IsNullOrWhiteSpace(context.User.FindFirstValue("tenant_id"));
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
@@ -79,14 +93,26 @@ if (app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
     // The owner's connection builds the schema, and the app connection stays restricted.
     if (app.Configuration.GetConnectionString("Migrations") is { } migrationsConnection)
     {
-        var options = new DbContextOptionsBuilder<FrongleDbContext>().UseNpgsql(migrationsConnection).Options;
-        using var migrationsContext = new FrongleDbContext(options, new NoCaller());
+        var options = new DbContextOptionsBuilder<FrongleDbContext>();
+        options.UseFrongleNpgsql(migrationsConnection);
+        using var migrationsContext = new FrongleDbContext(options.Options, new NoCaller());
         migrationsContext.Database.Migrate();
     }
     else
     {
-        using var scope = app.Services.CreateScope();
-        scope.ServiceProvider.GetRequiredService<FrongleDbContext>().Database.Migrate();
+        using var migrationScope = app.Services.CreateScope();
+        migrationScope.ServiceProvider.GetRequiredService<FrongleDbContext>().Database.Migrate();
+    }
+
+    // The first connection loaded the Postgres types before the migration created PostGIS, so it knows no geometry type.
+    using var scope = app.Services.CreateScope();
+    var database = scope.ServiceProvider.GetRequiredService<FrongleDbContext>().Database;
+    if (database.IsRelational())
+    {
+        var connection = (NpgsqlConnection)database.GetDbConnection();
+        connection.Open();
+        connection.ReloadTypes();
+        connection.Close();
     }
 }
 
@@ -137,6 +163,8 @@ app.MapGet("/api/me", (ClaimsPrincipal user) => new MeResponse(
     .Produces<MeResponse>(StatusCodes.Status200OK)
     .Produces(StatusCodes.Status401Unauthorized)
     .Produces(StatusCodes.Status403Forbidden);
+
+app.MapAreaEndpoints();
 
 app.Run();
 
