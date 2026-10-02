@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useMe } from './useMe'
 
@@ -48,5 +48,26 @@ it('forgets an earlier error when a later call succeeds', async () => {
   rerender({ token: 'new' })
 
   await waitFor(() => expect(result.current.me?.name).toBe('Morgan Manager'))
+  expect(result.current.error).toBeUndefined()
+})
+
+it('keeps the answer for the newest token when an answer for an older token arrives last', async () => {
+  const answers: ((response: object) => void)[] = []
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() => new Promise((resolve) => answers.push(resolve))),
+  )
+  const { result, rerender } = renderHook(({ token }) => useMe(token), {
+    initialProps: { token: 'old' },
+  })
+  rerender({ token: 'new' })
+  await waitFor(() => expect(answers).toHaveLength(2))
+
+  await act(async () =>
+    answers[1]({ ok: true, json: async () => ({ name: 'Morgan Manager', tenant: 'acme' }) }),
+  )
+  await act(async () => answers[0]({ ok: false, status: 401 }))
+
+  expect(result.current.me?.name).toBe('Morgan Manager')
   expect(result.current.error).toBeUndefined()
 })

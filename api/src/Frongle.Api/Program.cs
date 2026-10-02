@@ -38,11 +38,11 @@ builder.Services
     });
 builder.Services.AddTransient<IClaimsTransformation, KeycloakRolesClaimsTransformation>();
 builder.Services.AddAuthorizationBuilder()
-    .AddPolicy(AreaEndpoints.ManagerPolicy, policy => policy
+    .AddPolicy(Policies.Manager, policy => policy
         .RequireAuthenticatedUser()
         .RequireAssertion(HasTenant)
         .RequireRole(Roles.MaintenanceManager))
-    .AddPolicy(AreaEndpoints.ReaderPolicy, policy => policy
+    .AddPolicy(Policies.Reader, policy => policy
         .RequireAuthenticatedUser()
         .RequireAssertion(HasTenant)
         .RequireRole(Roles.MaintenanceManager, Roles.WorkTeam))

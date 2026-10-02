@@ -50,6 +50,12 @@ public sealed class S3ImageStorage : IImageStorage, IDisposable
     /// <inheritdoc />
     public void Dispose() => _client.Dispose();
 
+    /// <summary>Makes a pre-signed link to a file in the bucket.</summary>
+    /// <param name="key">Where the file is in the bucket.</param>
+    /// <param name="verb">What the link allows: PUT to upload or GET to read.</param>
+    /// <param name="validFor">How long the link works.</param>
+    /// <param name="contentType">The media type that an upload must declare, or <see langword="null"/> for a read.</param>
+    /// <returns>The signed URL.</returns>
     private string Sign(string key, HttpVerb verb, TimeSpan validFor, string? contentType) =>
         _client.GetPreSignedURL(new GetPreSignedUrlRequest
         {

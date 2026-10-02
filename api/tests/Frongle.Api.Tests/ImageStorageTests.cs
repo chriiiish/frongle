@@ -9,7 +9,8 @@ namespace Frongle.Api.Tests;
 public sealed class ImageStorageTests : IAsyncLifetime, IDisposable
 {
     private const string Bucket = "frongle-test";
-    private readonly MinioContainer _minio = new MinioBuilder("cgr.dev/chainguard/minio:latest").Build();
+    // A digest, not a tag, so that an upstream image update cannot change or break CI without a change here.
+    private readonly MinioContainer _minio = new MinioBuilder("cgr.dev/chainguard/minio@sha256:0f95aa412a12351a95bb43c3b54b66440eb0aa022bb3f3458942678a489e915b").Build();
     private S3ImageStorage _storage = null!;
 
     public async Task InitializeAsync()

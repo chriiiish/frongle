@@ -72,6 +72,18 @@ public sealed class EventImageEndpointTests(PostgresFixture database) : IDisposa
     }
 
     [Fact]
+    public async Task Uploads_asked_for_at_once_never_take_an_event_past_five_images()
+    {
+        var ids = await GivenAnEvent();
+
+        var responses = await Task.WhenAll(Enumerable.Range(0, 9).Select(_ => RequestUpload(As(WorkTeam), ids)));
+
+        Assert.Equal(5, responses.Count(r => r.StatusCode == HttpStatusCode.Created));
+        Assert.Equal(4, responses.Count(r => r.StatusCode == HttpStatusCode.Conflict));
+        Assert.Equal(5, (await ImagesOf(As(Manager), ids)).Count);
+    }
+
+    [Fact]
     public async Task The_events_of_an_asset_carry_their_images()
     {
         var ids = await GivenAnEvent();

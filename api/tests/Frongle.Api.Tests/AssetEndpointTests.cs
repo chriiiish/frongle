@@ -41,6 +41,55 @@ public sealed class AssetEndpointTests(PostgresFixture database) : IDisposable
     }
 
     [Fact]
+    public async Task An_omitted_type_latitude_or_longitude_is_a_validation_problem_not_a_default()
+    {
+        await GivenAreas();
+        var bodies = new object[]
+        {
+            new { latitude = Latitude, longitude = InManukauLongitude },
+            new { type = "LightPost", longitude = InManukauLongitude },
+            new { type = "LightPost", latitude = Latitude },
+        };
+
+        foreach (var body in bodies)
+        {
+            var response = await As(WorkTeam).PostAsJsonAsync("/api/assets", body);
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        }
+    }
+
+    [Fact]
+    public async Task A_point_on_the_edge_between_two_areas_belongs_to_the_one_with_the_lower_code()
+    {
+        await GivenAreas();
+
+        var asset = await CreateAssetOk(As(WorkTeam), "LightPost", 174.86, Latitude);
+
+        Assert.Equal("MN", asset.AreaCode);
+        Assert.Equal("MN-LP-00001", asset.FriendlyId);
+    }
+
+    [Fact]
+    public async Task Assets_added_while_an_area_shrinks_are_never_left_outside_it()
+    {
+        await GivenAreas();
+        var manukau = (await As(Manager).GetFromJsonAsync<List<JsonElement>>("/api/areas"))!.Single(a => a.GetProperty("code").GetString() == "MN");
+        // The new boundary ends at longitude 174.855. The points are inside the old boundary and outside the new one.
+        const double InOldOnly = 174.858;
+        var adds = Enumerable.Range(0, 6).Select(_ => CreateAsset(As(WorkTeam), "LightPost", InOldOnly, Latitude)).ToArray();
+        var shrink = As(Manager).PutAsJsonAsync($"/api/areas/{manukau.GetProperty("id").GetGuid()}", new { name = "Manukau", boundary = Shapes.Square(174.85, -37.05, 0.005) });
+
+        var shrunk = await shrink;
+        await Task.WhenAll(adds);
+
+        var assets = await As(Manager).GetFromJsonAsync<List<AssetView>>("/api/assets?west=174.8&south=-37.1&east=174.9&north=-37");
+        if (shrunk.IsSuccessStatusCode)
+            Assert.DoesNotContain(assets!, a => a.AreaCode == "MN" && a.Longitude > 174.855);
+        else
+            Assert.Equal(HttpStatusCode.Conflict, shrunk.StatusCode);
+    }
+
+    [Fact]
     public async Task Creating_an_asset_gives_it_a_friendly_id_from_its_area_type_and_the_next_number()
     {
         await GivenAreas();

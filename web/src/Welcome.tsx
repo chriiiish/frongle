@@ -19,9 +19,7 @@ const STATUSES = [
 function roleLine(roles: string[]) {
   if (roles.includes(MANAGER_ROLE))
     return 'You draw Areas, watch the status of every Asset, and keep the records straight.'
-  if (roles.includes(WORK_TEAM_ROLE))
-    return 'You install, check, repair, and remove Assets. Every job goes in the history of the Asset.'
-  return 'Open the map to get started.'
+  return 'You install, check, repair, and remove Assets. Every job goes in the history of the Asset.'
 }
 
 function Card({ title, text, action }: { title: string; text: string; action: string }) {
@@ -47,6 +45,19 @@ export function Welcome({ me, error }: { me: Me | undefined; error: string | und
   if (!me) return <p role="status">Loading…</p>
 
   const isManager = roles.includes(MANAGER_ROLE)
+  if (!isManager && !roles.includes(WORK_TEAM_ROLE))
+    return (
+      <div>
+        <header className="py-3 py-md-4">
+          <p className="text-uppercase fw-semibold small mb-1">{me.tenant}</p>
+          <h2 className="display-5">Welcome, {me.name}</h2>
+        </header>
+        <p className="alert alert-info" role="status">
+          Your account has no Frongle role yet. Ask a Maintenance Manager to give you one.
+        </p>
+      </div>
+    )
+
   return (
     <div>
       <header className="py-3 py-md-4">

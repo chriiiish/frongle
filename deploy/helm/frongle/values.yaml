@@ -63,6 +63,7 @@ storage:
 minio:
   enabled: false
   image: cgr.dev/chainguard/minio:latest
+  storage: 1Gi # Size of the volume that holds the photos.
   host: storage.localhost
   accessKey: frongle
   secretKey: '' # Required when minio.enabled is true.
