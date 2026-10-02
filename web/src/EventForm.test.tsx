@@ -98,3 +98,14 @@ it('shows the reason when the save failed and cancels on request', async () => {
   await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
   expect(onCancel).toHaveBeenCalled()
 })
+
+it('does not let the user save an event after clearing the time', async () => {
+  const { onSubmit } = renderForm()
+  await userEvent.type(screen.getByLabelText('Title'), 'Looked at it')
+
+  await userEvent.clear(screen.getByLabelText('When'))
+  await userEvent.click(screen.getByRole('button', { name: 'Add Event' }))
+
+  expect(screen.getByLabelText('When')).toBeRequired()
+  expect(onSubmit).not.toHaveBeenCalled()
+})

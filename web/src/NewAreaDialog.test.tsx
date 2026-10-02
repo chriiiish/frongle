@@ -119,3 +119,19 @@ it('cancels on request', async () => {
 
   expect(onCancel).toHaveBeenCalled()
 })
+
+it('cannot be closed while the area is being saved, so that the answer cannot change a later drawing', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() => new Promise(() => {})),
+  )
+  const { onCancel } = renderDialog()
+  await userEvent.type(screen.getByLabelText('Code'), 'mn')
+  await userEvent.type(screen.getByLabelText('Name'), 'Manukau')
+  await userEvent.click(screen.getByRole('button', { name: 'Add Area' }))
+
+  expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Close' })).toBeDisabled()
+  await userEvent.keyboard('{Escape}')
+  expect(onCancel).not.toHaveBeenCalled()
+})

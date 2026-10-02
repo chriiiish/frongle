@@ -47,8 +47,15 @@ export function AssetPanel({
   const load = useCallback(
     () =>
       api.listEvents(asset.id).then(
-        (found) => setEvents(newestFirst(found)),
-        (failure: Error) => setProblem(failure.message),
+        (found) => {
+          const sorted = newestFirst(found)
+          setEvents(sorted)
+          return sorted
+        },
+        (failure: Error) => {
+          setProblem(failure.message)
+          return undefined
+        },
       ),
     [api, asset.id],
   )
@@ -62,16 +69,26 @@ export function AssetPanel({
     try {
       if (mode.kind === 'editing') await api.changeEvent(asset.id, mode.event, draft)
       else await api.addEvent(asset.id, draft)
-      await load()
-      // The latest event decides the status, so the map needs the Asset again.
-      onChanged(await api.getAsset(asset.id))
-      setMode({ kind: 'reading' })
     } catch (failure) {
       setProblem((failure as Error).message)
-      // Someone else may have changed the event, and the next try needs its new version.
-      await load()
+      // Someone else may have changed the event, so the next try needs its new version. The form keeps what the user typed.
+      const fresh = await load()
+      const current =
+        mode.kind === 'editing' ? fresh?.find((e) => e.id === mode.event.id) : undefined
+      if (current) setMode({ kind: 'editing', event: current })
+      setSaving(false)
+      return
     }
+    // The write is done, so the form closes now. A failed refresh below must not invite a second write.
+    setMode({ kind: 'reading' })
     setSaving(false)
+    await load()
+    try {
+      // The latest event decides the status, so the map needs the Asset again.
+      onChanged(await api.getAsset(asset.id))
+    } catch (failure) {
+      setProblem((failure as Error).message)
+    }
   }
 
   return (

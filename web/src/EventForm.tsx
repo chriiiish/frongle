@@ -94,6 +94,7 @@ export function EventForm({
           className="form-control"
           id="event-when"
           type="datetime-local"
+          required
           value={when}
           onChange={(event) => setWhen(event.target.value)}
         />

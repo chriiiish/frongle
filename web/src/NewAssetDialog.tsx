@@ -47,10 +47,16 @@ export function NewAssetDialog({
     <Modal
       title="Add an Asset"
       onClose={onCancel}
+      closeDisabled={saving}
       onSubmit={add}
       footer={
         <>
-          <button type="button" className="btn btn-outline-dark" onClick={onCancel}>
+          <button
+            type="button"
+            className="btn btn-outline-dark"
+            disabled={saving}
+            onClick={onCancel}
+          >
             Cancel
           </button>
           <button type="submit" className="btn btn-primary" disabled={saving}>

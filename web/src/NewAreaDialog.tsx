@@ -39,10 +39,16 @@ export function NewAreaDialog({
     <Modal
       title="Add an Area"
       onClose={onCancel}
+      closeDisabled={saving}
       onSubmit={add}
       footer={
         <>
-          <button type="button" className="btn btn-outline-dark" onClick={onCancel}>
+          <button
+            type="button"
+            className="btn btn-outline-dark"
+            disabled={saving}
+            onClick={onCancel}
+          >
             Cancel
           </button>
           <button
