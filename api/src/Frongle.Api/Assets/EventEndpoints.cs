@@ -20,12 +20,16 @@ public sealed record EventRequest(EventType Type, string Title, string? Notes, D
 /// <param name="Notes">More detail, or <see langword="null"/> when there is none.</param>
 /// <param name="OccurredAt">When it happened.</param>
 /// <param name="Version">The version to send back when correcting the Event, so that the API can tell when someone else changed it first.</param>
-public sealed record EventResponse(Guid Id, Guid AssetId, EventType Type, string Title, string? Notes, DateTimeOffset OccurredAt, uint Version)
+/// <param name="Images">The photos of the Event that nobody removed.</param>
+public sealed record EventResponse(
+    Guid Id, Guid AssetId, EventType Type, string Title, string? Notes, DateTimeOffset OccurredAt, uint Version, IEnumerable<ImageResponse> Images)
 {
     /// <summary>Describes an Event for the caller.</summary>
     /// <param name="ev">The Event to describe.</param>
+    /// <param name="images">The photos of the Event that nobody removed.</param>
     /// <returns>The Event as the API sends it.</returns>
-    public static EventResponse From(AssetEvent ev) => new(ev.Id, ev.AssetId, ev.Type, ev.Title, ev.Notes, ev.OccurredAt, ev.Version);
+    public static EventResponse From(AssetEvent ev, IEnumerable<ImageResponse> images) =>
+        new(ev.Id, ev.AssetId, ev.Type, ev.Title, ev.Notes, ev.OccurredAt, ev.Version, images);
 }
 
 /// <summary>The endpoints that record what happened to an Asset and show its history.</summary>
@@ -66,7 +70,7 @@ public static class EventEndpoints
         return app;
     }
 
-    private static async Task<IResult> ListEvents(Guid assetId, FrongleDbContext db)
+    private static async Task<IResult> ListEvents(Guid assetId, FrongleDbContext db, IImageStorage storage)
     {
         if (!await db.Assets.AnyAsync(a => a.Id == assetId)) return Results.NotFound();
 
@@ -74,7 +78,8 @@ public static class EventEndpoints
             .Where(e => e.AssetId == assetId)
             .OrderByDescending(e => e.OccurredAt).ThenByDescending(e => e.Id)
             .ToListAsync();
-        return Results.Ok(events.Select(EventResponse.From));
+        var images = await ImageEndpoints.ImagesOf(db, storage, [.. events.Select(e => e.Id)]);
+        return Results.Ok(events.Select(e => EventResponse.From(e, images[e.Id])));
     }
 
     private static async Task<IResult> AddEvent(Guid assetId, EventRequest request, FrongleDbContext db)
@@ -96,10 +101,10 @@ public static class EventEndpoints
         };
         db.Events.Add(ev);
         await db.SaveChangesAsync();
-        return Results.Created($"/api/assets/{assetId}/events/{ev.Id}", EventResponse.From(ev));
+        return Results.Created($"/api/assets/{assetId}/events/{ev.Id}", EventResponse.From(ev, []));
     }
 
-    private static async Task<IResult> ChangeEvent(Guid assetId, Guid id, EventRequest request, FrongleDbContext db)
+    private static async Task<IResult> ChangeEvent(Guid assetId, Guid id, EventRequest request, FrongleDbContext db, IImageStorage storage)
     {
         if (Validate(request) is { } problems) return Results.ValidationProblem(problems);
         var ev = await db.Events.SingleOrDefaultAsync(e => e.Id == id && e.AssetId == assetId);
@@ -121,7 +126,7 @@ public static class EventEndpoints
         {
             return stale;
         }
-        return Results.Ok(EventResponse.From(ev));
+        return Results.Ok(EventResponse.From(ev, (await ImageEndpoints.ImagesOf(db, storage, [id]))[id]));
     }
 
     private static Dictionary<string, string[]>? Validate(EventRequest request)

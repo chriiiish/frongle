@@ -40,6 +40,9 @@ public class FrongleDbContext : DbContext
     /// <summary>The Events in the history of the caller's tenant's Assets.</summary>
     public DbSet<AssetEvent> Events => Set<AssetEvent>();
 
+    /// <summary>The images of the Events of the caller's tenant.</summary>
+    public DbSet<EventImage> EventImages => Set<EventImage>();
+
     /// <summary>Every recorded change, for the caller's tenant only.</summary>
     public DbSet<AuditRecord> AuditRecords => Set<AuditRecord>();
 
@@ -103,6 +106,19 @@ public class FrongleDbContext : DbContext
             ev.Property(e => e.Version).IsRowVersion();
             ev.HasOne<Asset>().WithMany().HasForeignKey(e => e.AssetId).OnDelete(DeleteBehavior.Restrict);
             ev.HasIndex(e => new { e.AssetId, e.OccurredAt });
+        });
+
+        modelBuilder.Entity<EventImage>(image =>
+        {
+            image.ToTable("event_images");
+            image.Property(i => i.Id).HasColumnName("id");
+            image.Property(i => i.EventId).HasColumnName("event_id");
+            image.Property(i => i.StorageKey).HasColumnName("storage_key");
+            image.Property(i => i.ContentType).HasColumnName("content_type");
+            image.Property(i => i.SizeBytes).HasColumnName("size_bytes");
+            image.Property(i => i.RemovedAt).HasColumnName("removed_at");
+            image.HasOne<AssetEvent>().WithMany().HasForeignKey(i => i.EventId).OnDelete(DeleteBehavior.Restrict);
+            image.HasIndex(i => i.EventId);
         });
 
         foreach (var entityType in modelBuilder.Model.GetEntityTypes().Where(t => typeof(ITenantOwned).IsAssignableFrom(t.ClrType)))
