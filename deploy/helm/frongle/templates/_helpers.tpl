@@ -1,9 +1,9 @@
 {{- define "frongle.dbHost" -}}
-{{- if .Values.postgres.enabled }}{{ .Release.Name }}-postgres{{ else }}{{ required "database.host is required when postgres.enabled is false" .Values.database.host }}{{ end -}}
+{{ required "database.host is required" .Values.database.host -}}
 {{- end }}
 
 {{- define "frongle.dbSecret" -}}
-{{- if .Values.postgres.enabled }}{{ .Release.Name }}-db{{ else }}{{ required "database.existingSecret is required when postgres.enabled is false" .Values.database.existingSecret }}{{ end -}}
+{{ required "database.existingSecret is required" .Values.database.existingSecret -}}
 {{- end }}
 
 {{- define "frongle.keycloakName" -}}{{ .Release.Name }}-keycloak{{- end }}

@@ -11,22 +11,22 @@ Two kinds of user:
 
 - `web/`: React and TypeScript (Vite, Vitest, React Testing Library). Mobile-first.
 - `api/`: C# .NET 10 minimal API with EF Core and PostgreSQL. `src/Frongle.Api`, `src/Frongle.Domain`, `tests/Frongle.Api.Tests`.
-- `deploy/`: Terraform (AWS: VPC, EKS, ECR, RDS) in `terraform/`, Helm chart in `helm/frongle/`, local kind cluster scripts in `local/`.
+- `deploy/`: Terraform (AWS: VPC, EKS, ECR, RDS) in `terraform/`, Helm chart in `helm/frongle/`, files for the local Docker Compose stack in `local/` (with `compose.yaml` at the top level).
 
 ## Commands
 
 - Web: `cd web && npm test`, `npm run lint`, `npm run build`
 - API: `cd api && dotnet test`
-- Deploy: `cd deploy/terraform && terraform validate`, `helm lint deploy/helm/frongle -f deploy/helm/frongle/values-local.yaml`
-- Local cluster: `deploy/local/up.sh` and `deploy/local/down.sh`
+- Deploy: `cd deploy/terraform && terraform validate`, `helm lint deploy/helm/frongle --set database.host=example --set database.existingSecret=example`
+- Local stack: `docker compose up --build` and `docker compose down`
 - Security scan: `trivy fs --scanners vuln,secret,misconfig --severity HIGH,CRITICAL .`
 
 ## Architecture
 
 - Multi-tenant: one shared database. Every tenant-owned table has a `tenant_id`. Isolation uses Postgres row-level security and an EF Core global query filter. The API takes the tenant from the validated token claim `tenant_id`, never from request data.
-- Auth: Keycloak (Operator, one `frongle` tenant space) runs in Kubernetes. Roles are `maintenance-manager` and `work-team`. The Helm chart builds that space in `keycloak-realm.yaml`.
+- Auth: Keycloak (Operator, one `frongle` tenant space) runs in Kubernetes in prod and in Docker Compose locally. Roles are `maintenance-manager` and `work-team`. The Helm chart builds that space in `keycloak-realm.yaml`. Locally, `deploy/local/realm.json` holds the same space plus demo users. Change both together.
 - The web app signs in with keycloak-js (PKCE). It reads `/config.json` at runtime, so one image works in every environment.
-- Local and prod only. Both use the same Helm chart. Local adds `values-local.yaml` (in-cluster Postgres, demo users).
+- Local and prod only. Prod uses the Helm chart on EKS. Local uses `compose.yaml` (Postgres, Keycloak, API, web, and an nginx gateway on `http://localhost`).
 
 ## Working rules
 

@@ -1,0 +1,77 @@
+# Runs Frongle on your machine. Open http://localhost and sign in as manager@acme.test with password "password".
+# The demo users and passwords below are for local work only.
+name: frongle
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: frongle
+      POSTGRES_USER: frongle
+      POSTGRES_PASSWORD: local-only-password
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./deploy/local/create-keycloak-database.sql:/docker-entrypoint-initdb.d/create-keycloak-database.sql:ro
+    healthcheck:
+      test: ['CMD', 'pg_isready', '-U', 'frongle', '-d', 'frongle']
+      interval: 5s
+      retries: 20
+
+  keycloak:
+    # Keep this version equal to deploy/keycloak-version.
+    image: quay.io/keycloak/keycloak:26.7.5
+    command: start-dev --import-realm
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: frongle
+      KC_DB_PASSWORD: local-only-password
+      KC_HTTP_RELATIVE_PATH: /auth
+      KC_HOSTNAME: http://localhost/auth
+      # The issuer stays public, and the API still reads metadata from this container.
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: 'true'
+      KC_PROXY_HEADERS: xforwarded
+    volumes:
+      - ./deploy/local/realm.json:/opt/keycloak/data/import/realm.json:ro
+      - ./deploy/helm/frongle/files/theme/theme.properties:/opt/keycloak/themes/frongle/login/theme.properties:ro
+      - ./deploy/helm/frongle/files/theme/frongle.css:/opt/keycloak/themes/frongle/login/resources/css/frongle.css:ro
+      - ./deploy/helm/frongle/files/theme/logo.svg:/opt/keycloak/themes/frongle/login/resources/img/logo.svg:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build: ./api
+    environment:
+      ConnectionStrings__Frongle: Host=postgres;Port=5432;Database=frongle;Username=frongle;Password=local-only-password;SSL Mode=Disable
+      Database__MigrateOnStartup: 'true'
+      Authentication__Authority: http://localhost/auth/realms/frongle
+      Authentication__ClientId: frongle-web
+      Authentication__MetadataAddress: http://keycloak:8080/auth/realms/frongle/.well-known/openid-configuration
+      # The metadata address is plain http://, so the API cannot require HTTPS for it.
+      Authentication__RequireHttpsMetadata: 'false'
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    build: ./web
+    volumes:
+      - ./deploy/local/config.json:/usr/share/nginx/html/config.json:ro
+
+  # Plays the part of the ingress: one address for the web app, the API, and Keycloak.
+  gateway:
+    image: nginx:alpine
+    ports:
+      - '80:80'
+    volumes:
+      - ./deploy/local/gateway.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - web
+      - api
+      - keycloak
+
+volumes:
+  postgres-data:

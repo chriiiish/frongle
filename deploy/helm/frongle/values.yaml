@@ -17,26 +17,17 @@ web:
   port: 8080
 
 database:
-  host: '' # Required when postgres.enabled is false (for example the RDS endpoint).
+  host: '' # Required (for example the RDS endpoint).
   port: 5432
   name: frongle
-  ssl: true # Use TLS to reach the database. Turn off for the in-cluster Postgres.
-  existingSecret: '' # Secret with the keys "username" and "password". Required when postgres.enabled is false.
-
-# In-cluster Postgres for local work. Prod uses RDS instead.
-postgres:
-  enabled: false
-  image: postgres:17-alpine
-  username: frongle
-  password: ''
+  ssl: true # Use TLS to reach the database.
+  existingSecret: '' # Secret with the keys "username" and "password". Required.
 
 keycloak:
   instances: 2
   realm: frongle
   clientId: frongle-web
   resources: {} # Kubernetes requests and limits for each Keycloak pod. Empty uses the operator defaults.
-  # Users are for local work only. Each has: username, password, email, tenantId, roles.
-  users: []
 
 ingress:
   className: nginx

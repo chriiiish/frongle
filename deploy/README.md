@@ -1,10 +1,10 @@
 # Deploy
 
-Terraform builds the AWS infrastructure. Helm deploys the app to it. The chart is the same for local and prod.
+Terraform builds the AWS infrastructure. Helm deploys the app to it. Local work uses Docker Compose, not this chart.
 
 ## Local
 
-Run `deploy/local/up.sh`. The script creates a kind cluster, installs the ingress controller and the Keycloak operator, builds the images, and installs the chart with `values-local.yaml`.
+Run `docker compose up --build` in the top-level folder. `compose.yaml` starts Postgres, Keycloak, the API, the web app, and an nginx gateway that plays the part of the ingress. The files that the stack needs are in `deploy/local/`.
 
 ## Terraform
 
@@ -40,6 +40,6 @@ The chart creates the `keycloak` database on RDS with a hook job. Keycloak runs 
 
 ```
 terraform init -backend=false && terraform validate
-helm lint helm/frongle -f helm/frongle/values-local.yaml
+helm lint helm/frongle --set database.host=example --set database.existingSecret=example
 helm/frongle/tests/tls.sh
 ```
