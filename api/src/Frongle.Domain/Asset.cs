@@ -29,6 +29,18 @@ public class Asset : ITenantOwned
     /// <summary>Where the Asset stands, in longitude and latitude (SRID 4326).</summary>
     public required Point Location { get; set; }
 
+    /// <summary>
+    /// <see langword="true"/> after a move into another Area gave the Asset a new <see cref="FriendlyId"/>, until someone records
+    /// that the new tag is fitted to the Asset.
+    /// </summary>
+    public bool NeedsRetag { get; set; }
+
+    /// <summary>
+    /// Changes every time the database saves the Asset. A caller that moves the Asset sends back the version that it read,
+    /// and the save fails when someone else saved the Asset in the meantime.
+    /// </summary>
+    public uint Version { get; set; }
+
     /// <summary>Builds the Friendly Id of an Asset.</summary>
     /// <param name="areaCode">The two-letter code of the Area that contains the Asset.</param>
     /// <param name="type">The type of the Asset.</param>
