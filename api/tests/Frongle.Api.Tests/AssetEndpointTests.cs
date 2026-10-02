@@ -74,15 +74,19 @@ public sealed class AssetEndpointTests(PostgresFixture database) : IDisposable
     {
         await GivenAreas();
         var manukau = (await As(Manager).GetFromJsonAsync<List<JsonElement>>("/api/areas"))!.Single(a => a.GetProperty("code").GetString() == "MN");
+        // The new boundary ends at longitude 174.855. The points are inside the old boundary and outside the new one.
+        const double InOldOnly = 174.858;
+        var adds = Enumerable.Range(0, 6).Select(_ => CreateAsset(As(WorkTeam), "LightPost", InOldOnly, Latitude)).ToArray();
         var shrink = As(Manager).PutAsJsonAsync($"/api/areas/{manukau.GetProperty("id").GetGuid()}", new { name = "Manukau", boundary = Shapes.Square(174.85, -37.05, 0.005) });
-        var adds = Enumerable.Range(0, 6).Select(_ => CreateAsset(As(WorkTeam), "LightPost", InManukauLongitude, Latitude));
 
         var shrunk = await shrink;
         await Task.WhenAll(adds);
 
         var assets = await As(Manager).GetFromJsonAsync<List<AssetView>>("/api/assets?west=174.8&south=-37.1&east=174.9&north=-37");
-        var west = shrunk.IsSuccessStatusCode ? 174.855 : 174.86;
-        Assert.All(assets!.Where(a => a.AreaCode == "MN"), a => Assert.True(a.Longitude <= west));
+        if (shrunk.IsSuccessStatusCode)
+            Assert.DoesNotContain(assets!, a => a.AreaCode == "MN" && a.Longitude > 174.855);
+        else
+            Assert.Equal(HttpStatusCode.Conflict, shrunk.StatusCode);
     }
 
     [Fact]
