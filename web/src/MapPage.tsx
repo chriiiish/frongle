@@ -1,14 +1,14 @@
 import 'leaflet/dist/leaflet.css'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   CircleMarker,
   MapContainer,
   Polygon,
   TileLayer,
   Tooltip,
-  ZoomControl,
   useMap,
   useMapEvents,
+  ZoomControl,
 } from 'react-leaflet'
 import { type Area, type Asset, type AssetStatus, type Bounds } from './api'
 import { AssetPanel } from './AssetPanel'
@@ -115,13 +115,18 @@ export function MapPage() {
   const selected = assets.find((asset) => asset.id === selectedId)
   const [areasProblem, setAreasProblem] = useState<string>()
   const [assetsProblem, setAssetsProblem] = useState<string>()
+  // Counts the Assets that the user added, so that a list request that began before one cannot answer without it.
+  const additions = useRef(0)
+  const areaAdditions = useRef(0)
   const zoomedIn = view !== undefined && view.zoom >= MIN_ASSET_ZOOM
 
   useEffect(() => {
     let current = true
+    const addedBefore = areaAdditions.current
     api.listAreas().then(
       (listed) => {
-        if (!current) return
+        // An Area that the manager drew while this request was out is newer than this answer.
+        if (!current || addedBefore !== areaAdditions.current) return
         setAreas(listed)
         setAreasProblem(undefined)
       },
@@ -136,18 +141,17 @@ export function MapPage() {
     if (!view || !zoomedIn) return
     // A slow answer for an earlier view must not replace the Assets of the view the user sees now.
     let current = true
-    const timer = setTimeout(
-      () =>
-        api.listAssets(view.bounds).then(
-          (listed) => {
-            if (!current) return
-            setAssets(listed)
-            setAssetsProblem(undefined)
-          },
-          (failure: Error) => current && setAssetsProblem(failure.message),
-        ),
-      MOVE_DELAY_MS,
-    )
+    const timer = setTimeout(() => {
+      const addedBefore = additions.current
+      void api.listAssets(view.bounds).then(
+        (listed) => {
+          if (!current || addedBefore !== additions.current) return
+          setAssets(listed)
+          setAssetsProblem(undefined)
+        },
+        (failure: Error) => current && setAssetsProblem(failure.message),
+      )
+    }, MOVE_DELAY_MS)
     return () => {
       current = false
       clearTimeout(timer)
@@ -176,7 +180,7 @@ export function MapPage() {
         maxBounds={WORLD_BOUNDS}
         maxBoundsViscosity={1}
       >
-        <ZoomControl position="bottomleft" />
+        <ZoomControl position="topright" />
         <TileLayer url={TILE_URL} attribution={TILE_CREDIT} />
         <ViewWatcher onChange={setView} />
         <ClickWatcher onClick={clickMap} />
@@ -216,7 +220,10 @@ export function MapPage() {
               center={[asset.latitude, asset.longitude]}
               radius={9}
               bubblingMouseEvents={false}
-              eventHandlers={{ click: () => setSelectedId(asset.id) }}
+              eventHandlers={{
+                click: (event) =>
+                  corners ? setCorners([...corners, event.latlng]) : setSelectedId(asset.id),
+              }}
               pathOptions={{ color: STATUS_COLOUR[asset.status], fillOpacity: 0.9 }}
             >
               <Tooltip>
@@ -225,10 +232,16 @@ export function MapPage() {
             </CircleMarker>
           ))}
       </MapContainer>
-      <div className="map-overlay position-absolute top-0 start-0 p-3 p-md-5 d-flex flex-column gap-2">
-        <SearchBox onPick={showFound} />
+      {/* The tools and the notices share one column, so they cannot cover each other. The zoom buttons sit at the right. */}
+      <div
+        data-testid="map-overlay"
+        className="position-absolute top-0 start-0 end-0 p-2 p-md-3 pe-5 d-flex flex-column align-items-start gap-2 pe-none map-notice"
+      >
+        <div className="pe-auto col-12 col-md-5 col-lg-4">
+          <SearchBox onPick={showFound} />
+        </div>
         {moving ? (
-          <div className="card card-body py-2 px-3 shadow-sm">
+          <div className="card card-body py-2 px-3 shadow-sm pe-auto">
             <p className="mb-2">Click the new place for {moving.friendlyId}.</p>
             <button
               type="button"
@@ -241,7 +254,7 @@ export function MapPage() {
         ) : (
           roles.includes(MANAGER_ROLE) &&
           (corners ? (
-            <div className="card card-body py-2 px-3 shadow-sm">
+            <div className="card card-body py-2 px-3 shadow-sm pe-auto">
               <p className="mb-2">Click the map to mark each corner of the Area.</p>
               <div className="d-flex gap-2">
                 <button
@@ -272,7 +285,7 @@ export function MapPage() {
           ) : (
             <button
               type="button"
-              className="btn btn-primary shadow-sm align-self-start"
+              className="btn btn-primary shadow-sm pe-auto"
               onClick={() => setCorners([])}
             >
               Draw Area
@@ -280,19 +293,23 @@ export function MapPage() {
           ))
         )}
         {view && !zoomedIn && (
-          <p className="alert alert-info py-1 px-3 mb-0 shadow-sm" role="status">
+          <p className="alert alert-info py-1 px-3 mb-0 shadow-sm pe-auto" role="status">
             Zoom in to see Assets.
           </p>
         )}
         {added && (
-          <p className="alert alert-success py-1 px-3 mb-0 shadow-sm" role="status">
+          <p className="alert alert-success py-1 px-3 mb-0 shadow-sm pe-auto" role="status">
             Added {added}.
           </p>
         )}
         {Object.entries({ areas: areasProblem, assets: assetsProblem }).map(
           ([source, problem]) =>
             problem && (
-              <p key={source} className="alert alert-danger py-1 px-3 shadow-sm" role="alert">
+              <p
+                key={source}
+                className="alert alert-danger py-1 px-3 mb-0 shadow-sm pe-auto"
+                role="alert"
+              >
                 {problem}
               </p>
             ),
@@ -300,6 +317,7 @@ export function MapPage() {
       </div>
       {selected && (
         <AssetPanel
+          key={selected.id}
           asset={selected}
           onChanged={(changed) =>
             setAssets((current) => current.map((a) => (a.id === changed.id ? changed : a)))
@@ -315,6 +333,7 @@ export function MapPage() {
         <NewAreaDialog
           corners={corners}
           onCreated={(area) => {
+            areaAdditions.current += 1
             setAreas((current) => [...current, area])
             setCorners(undefined)
             setNaming(false)
@@ -339,6 +358,7 @@ export function MapPage() {
         <NewAssetDialog
           location={adding}
           onCreated={(asset) => {
+            additions.current += 1
             setAssets((current) => [...current, asset])
             setAdded(asset.friendlyId)
             setAdding(undefined)

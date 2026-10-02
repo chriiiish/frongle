@@ -54,8 +54,15 @@ export function AssetPanel({
   const load = useCallback(
     () =>
       api.listEvents(asset.id).then(
-        (found) => setEvents(newestFirst(found)),
-        (failure: Error) => setProblem(failure.message),
+        (found) => {
+          const sorted = newestFirst(found)
+          setEvents(sorted)
+          return sorted
+        },
+        (failure: Error) => {
+          setProblem(failure.message)
+          return undefined
+        },
       ),
     [api, asset.id],
   )
@@ -66,34 +73,47 @@ export function AssetPanel({
   async function save(draft: EventDraft, photos: File[]) {
     setSaving(true)
     setProblem(undefined)
+    let saved: AssetEvent
     try {
-      const saved =
+      saved =
         mode.kind === 'editing'
           ? await api.changeEvent(asset.id, mode.event, draft)
           : await api.addEvent(asset.id, draft)
-      const photoProblem = await attach(saved.id, photos)
-      await load()
-      // The latest event decides the status, so the map needs the Asset again.
-      onChanged(await api.getAsset(asset.id))
-      setMode({ kind: 'reading' })
-      setProblem(photoProblem)
     } catch (failure) {
       setProblem((failure as Error).message)
-      // Someone else may have changed the event, and the next try needs its new version.
-      await load()
+      // Someone else may have changed the event, so the next try needs its new version. The form keeps what the user typed.
+      const fresh = await load()
+      const current =
+        mode.kind === 'editing' ? fresh?.find((e) => e.id === mode.event.id) : undefined
+      if (current) setMode({ kind: 'editing', event: current })
+      setSaving(false)
+      return
     }
+    // The write is done, so the form closes after the photos. A failed upload or refresh must not invite a second write.
+    const photoProblem = await attach(saved.id, photos)
+    setMode({ kind: 'reading' })
     setSaving(false)
+    setProblem(photoProblem)
+    await load()
+    try {
+      // The latest event decides the status, so the map needs the Asset again.
+      onChanged(await api.getAsset(asset.id))
+    } catch (failure) {
+      setProblem((failure as Error).message)
+    }
   }
 
   // The event is saved by now, so a photo that fails leaves the event in place and the user can add the photo again.
   async function attach(eventId: string, photos: File[]) {
+    const failed: string[] = []
     for (const photo of photos) {
       try {
         await api.attachPhoto(asset.id, eventId, photo)
       } catch (failure) {
-        return `${photo.name} could not be uploaded. ${(failure as Error).message}`
+        failed.push(`${photo.name} could not be uploaded. ${(failure as Error).message}`)
       }
     }
+    return failed.length > 0 ? failed.join(' ') : undefined
   }
 
   async function markRetagged() {
@@ -214,19 +234,20 @@ export function AssetPanel({
                 {event.notes && <p className="mb-0 mt-1">{event.notes}</p>}
                 {event.images.length > 0 && (
                   <div className="d-flex flex-wrap gap-2 mt-2">
-                    {event.images.map((image) => (
+                    {event.images.map((image, index) => (
                       <div className="position-relative" key={image.id}>
                         <a href={image.readUrl} target="_blank" rel="noreferrer">
                           <img
                             className="photo-thumb img-thumbnail"
                             src={image.readUrl}
+                            loading="lazy"
                             alt={`Photo of ${event.title}`}
                           />
                         </a>
                         <button
                           type="button"
                           className="btn-close btn-sm position-absolute top-0 end-0 m-1 bg-body"
-                          aria-label="Remove photo"
+                          aria-label={`Remove photo ${index + 1} of ${event.images.length} from ${event.title}`}
                           onClick={() => void removePhoto(event, image)}
                         />
                       </div>

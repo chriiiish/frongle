@@ -86,3 +86,55 @@ it('shows why the API refused and stays open so that the user can cancel', async
   await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
   expect(onCancel).toHaveBeenCalled()
 })
+
+it('moves keyboard focus into the dialog and gives it back to the map control when the dialog closes', async () => {
+  const opener = document.createElement('button')
+  document.body.append(opener)
+  opener.focus()
+  const view = render(
+    <AuthContext.Provider value={auth}>
+      <NewAssetDialog location={where} onCreated={vi.fn()} onCancel={vi.fn()} />
+    </AuthContext.Provider>,
+  )
+
+  expect(screen.getByRole('dialog')).toContainElement(document.activeElement as HTMLElement)
+
+  view.unmount()
+  expect(opener).toHaveFocus()
+  opener.remove()
+})
+
+it('cancels when the user presses Escape', async () => {
+  const { onCancel } = renderDialog()
+
+  await userEvent.keyboard('{Escape}')
+
+  expect(onCancel).toHaveBeenCalled()
+})
+
+it('keeps Tab and Shift+Tab inside the dialog', async () => {
+  renderDialog()
+  const close = screen.getByRole('button', { name: 'Close' })
+  const add = screen.getByRole('button', { name: 'Add Asset' })
+
+  add.focus()
+  await userEvent.tab()
+  expect(close).toHaveFocus()
+
+  await userEvent.tab({ shift: true })
+  expect(add).toHaveFocus()
+})
+
+it('cannot be closed while the asset is being saved, so that the answer cannot change a later dialog', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() => new Promise(() => {})),
+  )
+  const { onCancel } = renderDialog()
+  await userEvent.click(screen.getByRole('button', { name: 'Add Asset' }))
+
+  expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Close' })).toBeDisabled()
+  await userEvent.keyboard('{Escape}')
+  expect(onCancel).not.toHaveBeenCalled()
+})

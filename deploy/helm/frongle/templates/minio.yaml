@@ -1,0 +1,70 @@
+{{- if .Values.minio.enabled }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ .Release.Name }}-minio
+stringData:
+  accessKey: {{ .Values.minio.accessKey | quote }}
+  secretKey: {{ required "minio.secretKey is required when minio.enabled is true" .Values.minio.secretKey | quote }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-minio
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}-minio
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}-minio
+    spec:
+      # MinIO treats each top-level folder of its data as a bucket, so this makes the bucket.
+      initContainers:
+        - name: make-bucket
+          image: busybox:1.37
+          command: ["mkdir", "-p", "/data/{{ required "storage.bucket is required" .Values.storage.bucket }}"]
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      containers:
+        - name: minio
+          image: {{ .Values.minio.image }}
+          args: ["server", "/data"]
+          env:
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-minio
+                  key: accessKey
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-minio
+                  key: secretKey
+          ports:
+            - containerPort: 9000
+          readinessProbe:
+            httpGet:
+              path: /minio/health/ready
+              port: 9000
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-minio
+spec:
+  selector:
+    app: {{ .Release.Name }}-minio
+  ports:
+    - port: 9000
+      targetPort: 9000
+{{- end }}

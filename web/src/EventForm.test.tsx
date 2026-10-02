@@ -163,3 +163,29 @@ it('stops at the number of photos that the event can still hold', async () => {
   expect(screen.getByText('b.jpg')).toBeInTheDocument()
   expect(screen.queryByText('c.jpg')).not.toBeInTheDocument()
 })
+
+it('does not let the user save an event after clearing the time', async () => {
+  const { onSubmit } = renderForm()
+  await userEvent.type(screen.getByLabelText('Title'), 'Looked at it')
+
+  await userEvent.clear(screen.getByLabelText('When'))
+  await userEvent.click(screen.getByRole('button', { name: 'Add Event' }))
+
+  expect(screen.getByLabelText('When')).toBeRequired()
+  expect(onSubmit).not.toHaveBeenCalled()
+})
+
+it('says both what was refused and that the event is full when one selection breaks both rules', async () => {
+  renderForm({ photoSlots: 2 })
+
+  await userEvent.upload(
+    screen.getByLabelText('Photos'),
+    [photo('a.jpg'), photo('b.jpg'), photo('c.jpg'), photo('notes.pdf', 'application/pdf')],
+    { applyAccept: false },
+  )
+
+  const alert = screen.getByRole('alert')
+  expect(alert).toHaveTextContent('Only JPEG, PNG, and WebP photos up to 10 MB are accepted.')
+  expect(alert).toHaveTextContent('An event holds 5 photos at most.')
+  expect(screen.queryByText('c.jpg')).not.toBeInTheDocument()
+})

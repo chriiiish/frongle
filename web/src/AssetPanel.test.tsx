@@ -299,7 +299,9 @@ it('removes a photo from an event', async () => {
   await screen.findByRole('img', { name: 'Photo of Installed new post' })
   events = [checked, { ...installed, images: [] }]
 
-  await userEvent.click(screen.getByRole('button', { name: 'Remove photo' }))
+  await userEvent.click(
+    screen.getByRole('button', { name: 'Remove photo 1 of 1 from Installed new post' }),
+  )
 
   await waitFor(() => expect(screen.queryByRole('img')).not.toBeInTheDocument())
   expect(fetchMock).toHaveBeenCalledWith(
@@ -403,4 +405,121 @@ it('shows who changed what and when', async () => {
   expect(rows[1]).toHaveTextContent('user-3')
   await userEvent.click(screen.getByRole('button', { name: 'Events' }))
   expect(screen.getByText('Annual check')).toBeInTheDocument()
+})
+
+it('sends the newest version when the user saves again after the API refused a stale one', async () => {
+  const newer = { ...checked, title: 'Checked by someone else', version: 13 }
+  let putCount = 0
+  const fetchMock = stubApi()
+  fetchMock.mockImplementation(async (url: string, init: RequestInit = {}) => {
+    const key = `${init.method ?? 'GET'} ${url}`
+    if (key === 'GET /api/assets/asset-1/events')
+      return { ok: true, status: 200, json: async () => events }
+    if (key === 'PUT /api/assets/asset-1/events/event-2') {
+      putCount += 1
+      return putCount === 1
+        ? {
+            ok: false,
+            status: 409,
+            json: async () => ({ title: 'Someone else changed this Event.' }),
+          }
+        : { ok: true, status: 200, json: async () => newer }
+    }
+    if (key === 'GET /api/assets/asset-1') return { ok: true, status: 200, json: async () => pole }
+    return { ok: false, status: 404, json: async () => ({}) }
+  })
+  renderPanel()
+  const first = (await screen.findAllByRole('listitem'))[0]
+  await userEvent.click(within(first).getByRole('button', { name: 'Edit' }))
+  await userEvent.type(screen.getByLabelText('Title'), '!')
+  events = [newer, installed]
+
+  await userEvent.click(screen.getByRole('button', { name: 'Save Event' }))
+  await screen.findByRole('alert')
+  expect(screen.getByLabelText('Title')).toHaveValue('Annual check!')
+  await userEvent.click(screen.getByRole('button', { name: 'Save Event' }))
+
+  const puts = fetchMock.mock.calls.filter(([, init]) => init?.method === 'PUT')
+  expect(JSON.parse(puts[1][1]!.body as string).version).toBe(13)
+})
+
+it('does not add the same event twice when only the refresh after the save fails', async () => {
+  const fetchMock = stubApi({
+    'POST /api/assets/asset-1/events': { ok: true, status: 201, body: checked },
+    'GET /api/assets/asset-1': { ok: false, status: 503, body: {} },
+  })
+  renderPanel()
+  await screen.findByText('Annual check')
+
+  await userEvent.click(screen.getByRole('button', { name: 'Add event' }))
+  await userEvent.type(screen.getByLabelText('Title'), 'Looked at it')
+  await userEvent.click(screen.getByRole('button', { name: 'Add Event' }))
+
+  expect(await screen.findByRole('button', { name: 'Add event' })).toBeInTheDocument()
+  expect(screen.queryByLabelText('Title')).not.toBeInTheDocument()
+  expect(await screen.findByRole('alert')).toHaveTextContent('503')
+  expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1)
+})
+
+it('tries every photo and names each one that could not be uploaded', async () => {
+  const added = { ...checked, id: 'event-3', title: 'Replaced lamp', version: 20 }
+  const fetchMock = stubApi({
+    'POST /api/assets/asset-1/events': { ok: true, status: 201, body: added },
+    'POST /api/assets/asset-1/events/event-3/images': {
+      ok: false,
+      status: 409,
+      body: { title: 'The photo was refused.' },
+    },
+  })
+  renderPanel()
+  await screen.findByText('Annual check')
+  events = [added, checked, installed]
+
+  await userEvent.click(screen.getByRole('button', { name: 'Add event' }))
+  await userEvent.type(screen.getByLabelText('Title'), 'Replaced lamp')
+  await userEvent.upload(screen.getByLabelText('Photos'), [
+    new File(['abcd'], 'one.png', { type: 'image/png' }),
+    new File(['abcd'], 'two.png', { type: 'image/png' }),
+  ])
+  await userEvent.click(screen.getByRole('button', { name: 'Add Event' }))
+
+  const alert = await screen.findByRole('alert')
+  expect(alert).toHaveTextContent('one.png could not be uploaded.')
+  expect(alert).toHaveTextContent('two.png could not be uploaded.')
+  const asks = fetchMock.mock.calls.filter(
+    ([url]) => url === '/api/assets/asset-1/events/event-3/images',
+  )
+  expect(asks).toHaveLength(2)
+})
+
+it('loads photos only when they scroll into view', async () => {
+  stubApi()
+
+  renderPanel()
+
+  expect(await screen.findByRole('img', { name: 'Photo of Installed new post' })).toHaveAttribute(
+    'loading',
+    'lazy',
+  )
+})
+
+it('tells each remove button apart by its photo and event', async () => {
+  const twoPhotos = {
+    ...installed,
+    images: [
+      { id: 'image-1', contentType: 'image/png', sizeBytes: 4, readUrl: 'https://s3.test/read/1' },
+      { id: 'image-2', contentType: 'image/png', sizeBytes: 4, readUrl: 'https://s3.test/read/2' },
+    ],
+  }
+  events = [checked, twoPhotos]
+  stubApi()
+
+  renderPanel()
+
+  expect(
+    await screen.findByRole('button', { name: 'Remove photo 1 of 2 from Installed new post' }),
+  ).toBeInTheDocument()
+  expect(
+    screen.getByRole('button', { name: 'Remove photo 2 of 2 from Installed new post' }),
+  ).toBeInTheDocument()
 })

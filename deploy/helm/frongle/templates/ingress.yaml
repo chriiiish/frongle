@@ -4,6 +4,8 @@ metadata:
   name: {{ .Release.Name }}
   annotations:
     nginx.ingress.kubernetes.io/proxy-buffer-size: 128k
+    # Photos go through the ingress to MinIO in the local cluster.
+    nginx.ingress.kubernetes.io/proxy-body-size: 12m
     {{- if .Values.ingress.tls.enabled }}
     cert-manager.io/cluster-issuer: {{ .Values.ingress.tls.clusterIssuer }}
     {{- end }}
@@ -16,6 +18,18 @@ spec:
       secretName: {{ .Values.ingress.tls.secretName }}
   {{- end }}
   rules:
+    {{- if .Values.minio.enabled }}
+    - host: {{ .Values.minio.host }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Release.Name }}-minio
+                port:
+                  number: 9000
+    {{- end }}
     - http:
         paths:
           - path: /auth

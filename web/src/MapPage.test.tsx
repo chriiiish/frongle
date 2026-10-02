@@ -32,11 +32,13 @@ vi.mock('react-leaflet', () => ({
     center,
     zoom,
     maxBounds,
+    zoomControl,
     children,
   }: {
     center: [number, number]
     zoom: number
     maxBounds: [number, number][]
+    zoomControl?: boolean
     children: ReactNode
   }) => (
     <div
@@ -44,6 +46,7 @@ vi.mock('react-leaflet', () => ({
       data-center={center.join(',')}
       data-zoom={zoom}
       data-max-bounds={JSON.stringify(maxBounds)}
+      data-default-zoom-control={String(zoomControl ?? true)}
     >
       {children}
     </div>
@@ -71,24 +74,29 @@ vi.mock('react-leaflet', () => ({
     center,
     pathOptions,
     eventHandlers,
+    bubblingMouseEvents,
     children,
   }: {
     center: [number, number]
     pathOptions: { color: string; className?: string }
-    eventHandlers?: { click: () => void }
+    eventHandlers?: { click: (event: { latlng: { lat: number; lng: number } }) => void }
+    bubblingMouseEvents?: boolean
     children: ReactNode
   }) => (
     <div
       data-testid={pathOptions.className === 'corner' ? 'corner' : 'asset'}
       data-center={center.join(',')}
       data-color={pathOptions.color}
-      onClick={eventHandlers?.click}
+      onClick={() => eventHandlers?.click({ latlng: { lat: center[0], lng: center[1] } })}
+      data-bubbling={String(bubblingMouseEvents)}
     >
       {children}
     </div>
   ),
+  ZoomControl: ({ position }: { position: string }) => (
+    <div data-testid="zoom-control" data-position={position} />
+  ),
   Tooltip: ({ children }: { children: ReactNode }) => <span>{children}</span>,
-  ZoomControl: () => null,
   useMap: () => leaflet.map,
   useMapEvents: (handlers: Record<string, (event?: unknown) => void>) => {
     Object.assign(leaflet.handlers, handlers)
@@ -587,4 +595,109 @@ it('finds an asset by friendly id, shows it on the map, and opens its history', 
   expect(await screen.findByRole('heading', { name: 'MN-SS-00007' })).toBeInTheDocument()
   expect(fetchMock).toHaveBeenCalledWith('/api/assets/asset-7/events', expect.anything())
   expect(leaflet.flownTo).toEqual({ center: [-37.041, 174.851], zoom: 17 })
+})
+
+it('does not pass a click on an asset through to the map, so that it does not open the add dialog', async () => {
+  stubApi()
+  await renderMapPage()
+
+  expect(await screen.findByTestId('asset')).toHaveAttribute('data-bubbling', 'false')
+})
+
+it('keeps a new asset on the map when a list request that began before it answers afterwards', async () => {
+  const created = {
+    ...pole,
+    id: 'asset-9',
+    friendlyId: 'MN-SS-00001',
+    status: 'PendingInstallation',
+  }
+  const listAnswers: ((assets: unknown[]) => void)[] = []
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') return { ok: true, status: 201, json: async () => created }
+      if (url.startsWith('/api/areas')) return { ok: true, json: async () => [] }
+      return { ok: true, json: () => new Promise((resolve) => listAnswers.push(resolve)) }
+    }),
+  )
+  await renderMapPage()
+  await waitFor(() => expect(listAnswers).toHaveLength(1))
+  await act(async () => leaflet.handlers.click({ latlng: { lat: -37.045, lng: 174.855 } }))
+  await userEvent.click(screen.getByRole('button', { name: 'Add Asset' }))
+  expect(await screen.findByTestId('asset')).toHaveTextContent('MN-SS-00001')
+
+  await act(async () => listAnswers[0]([]))
+
+  expect(screen.getByTestId('asset')).toHaveTextContent('MN-SS-00001')
+})
+
+it('starts the panel afresh when the user picks another asset', async () => {
+  const second = { ...pole, id: 'asset-2', friendlyId: 'MN-LP-00002', latitude: -37.046 }
+  stubApi({
+    '/api/assets': [pole, second],
+    '/api/assets/asset-1/events': [],
+    '/api/assets/asset-2/events': [],
+  })
+  await renderMapPage()
+  const markers = await screen.findAllByTestId('asset')
+  await userEvent.click(markers[0])
+  await userEvent.click(await screen.findByRole('button', { name: 'Add event' }))
+  expect(screen.getByLabelText('Title')).toBeInTheDocument()
+
+  await userEvent.click(markers[1])
+
+  expect(await screen.findByRole('heading', { name: 'MN-LP-00002' })).toBeInTheDocument()
+  expect(screen.queryByLabelText('Title')).not.toBeInTheDocument()
+})
+
+it('adds a corner when the manager clicks an asset while drawing, and opens no panel', async () => {
+  stubApi({ '/api/assets/asset-1/events': [] })
+  await renderMapPage(MANAGER)
+  await userEvent.click(await screen.findByRole('button', { name: 'Draw Area' }))
+
+  await userEvent.click(await screen.findByTestId('asset'))
+
+  expect(screen.getAllByTestId('corner')).toHaveLength(1)
+  expect(screen.queryByRole('heading', { name: 'MN-LP-00001' })).not.toBeInTheDocument()
+})
+
+it('keeps the drawing tools, the notices, and the zoom buttons apart on a phone', async () => {
+  stubApi()
+  leaflet.zoom = 12
+  await renderMapPage(MANAGER)
+
+  const overlay = screen.getByTestId('map-overlay')
+  expect(overlay).toContainElement(screen.getByRole('button', { name: 'Draw Area' }))
+  expect(overlay).toContainElement(screen.getByText('Zoom in to see Assets.'))
+  expect(screen.getByTestId('map')).toHaveAttribute('data-default-zoom-control', 'false')
+  expect(screen.getByTestId('zoom-control')).toHaveAttribute('data-position', 'topright')
+})
+
+it('keeps a new area on the map when the list request that began before it answers afterwards', async () => {
+  const created = { ...manukau, id: 'area-9', code: 'OT', name: 'Otara' }
+  const areaAnswers: ((areas: unknown[]) => void)[] = []
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') return { ok: true, status: 201, json: async () => created }
+      if (url.startsWith('/api/areas'))
+        return { ok: true, json: () => new Promise((resolve) => areaAnswers.push(resolve)) }
+      return { ok: true, json: async () => [] }
+    }),
+  )
+  await renderMapPage(MANAGER)
+  await waitFor(() => expect(areaAnswers).toHaveLength(1))
+  await userEvent.click(screen.getByRole('button', { name: 'Draw Area' }))
+  await click(-37.05, 174.85)
+  await click(-37.05, 174.86)
+  await click(-37.04, 174.86)
+  await userEvent.click(screen.getByRole('button', { name: 'Finish' }))
+  await userEvent.type(screen.getByLabelText('Code'), 'OT')
+  await userEvent.type(screen.getByLabelText('Name'), 'Otara')
+  await userEvent.click(screen.getByRole('button', { name: 'Add Area' }))
+  expect(await screen.findByTestId('area')).toHaveTextContent('OT')
+
+  await act(async () => areaAnswers[0]([]))
+
+  expect(screen.getByTestId('area')).toHaveTextContent('OT')
 })

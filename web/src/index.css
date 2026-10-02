@@ -64,29 +64,9 @@ h6 {
   }
 }
 
-/*
- * Leaflet panes sit at z-index 400 to 700, so the search, tools, and notices must sit above them.
- * The overlay lets clicks through to the map, and only its children take them. The zoom control is at the bottom left.
- */
-.map-overlay {
+/* Leaflet panes sit at z-index 400 to 700, so a notice over the map must sit above them. */
+.map-notice {
   z-index: 1000;
-  pointer-events: none;
-  max-width: 100%;
-}
-
-.map-overlay > * {
-  pointer-events: auto;
-  align-self: flex-start;
-}
-
-.map-overlay > :first-child {
-  align-self: stretch;
-}
-
-@media (min-width: 768px) {
-  .map-overlay {
-    width: 26rem;
-  }
 }
 
 /* On a phone the Asset panel is a sheet at the bottom of the map. On a wider screen it sits at the right. */
