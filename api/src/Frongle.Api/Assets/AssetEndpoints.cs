@@ -18,13 +18,15 @@ public sealed record AssetRequest(AssetType Type, double Latitude, double Longit
 /// <param name="AreaCode">The code of the Area that contains the Asset.</param>
 /// <param name="Latitude">Where the Asset stands, in degrees.</param>
 /// <param name="Longitude">Where the Asset stands, in degrees.</param>
-public sealed record AssetResponse(Guid Id, string FriendlyId, AssetType Type, string AreaCode, double Latitude, double Longitude)
+/// <param name="Status">Where the Asset is in its life, worked out from its latest Event.</param>
+public sealed record AssetResponse(Guid Id, string FriendlyId, AssetType Type, string AreaCode, double Latitude, double Longitude, AssetStatus Status)
 {
     /// <summary>Describes an Asset for the caller.</summary>
     /// <param name="asset">The Asset to describe.</param>
+    /// <param name="status">The status of the Asset, which the Events of the Asset decide.</param>
     /// <returns>The Asset as the API sends it.</returns>
-    public static AssetResponse From(Asset asset) =>
-        new(asset.Id, asset.FriendlyId, asset.Type, asset.AreaCode, asset.Location.Y, asset.Location.X);
+    public static AssetResponse From(Asset asset, AssetStatus status) =>
+        new(asset.Id, asset.FriendlyId, asset.Type, asset.AreaCode, asset.Location.Y, asset.Location.X, status);
 }
 
 /// <summary>The endpoints that add Assets to the map and find them again.</summary>
@@ -53,10 +55,7 @@ public static class AssetEndpoints
             .Produces<IEnumerable<AssetResponse>>()
             .ProducesValidationProblem();
 
-        assets.MapGet("/{id:guid}", async (Guid id, FrongleDbContext db) =>
-                await db.Assets.SingleOrDefaultAsync(a => a.Id == id) is { } asset
-                    ? Results.Ok(AssetResponse.From(asset))
-                    : Results.NotFound())
+        assets.MapGet("/{id:guid}", GetAsset)
             .WithSummary("Show one Asset")
             .WithDescription("Finds the Asset by its Internal Id.")
             .Produces<AssetResponse>()
@@ -96,7 +95,16 @@ public static class AssetEndpoints
         db.Assets.Add(asset);
         await db.SaveChangesAsync();
         await transaction.CommitAsync();
-        return Results.Created($"/api/assets/{asset.Id}", AssetResponse.From(asset));
+        return Results.Created($"/api/assets/{asset.Id}", AssetResponse.From(asset, AssetStatus.PendingInstallation));
+    }
+
+    private static async Task<IResult> GetAsset(Guid id, FrongleDbContext db)
+    {
+        var asset = await db.Assets.SingleOrDefaultAsync(a => a.Id == id);
+        if (asset is null) return Results.NotFound();
+
+        var status = (await AssetStatusLookup.For(db, [id]))[id];
+        return Results.Ok(AssetResponse.From(asset, status));
     }
 
     private static async Task<IResult> ListAssets(double west, double south, double east, double north, FrongleDbContext db)
@@ -111,7 +119,8 @@ public static class AssetEndpoints
             .FromSql($"SELECT * FROM assets WHERE ST_Intersects(location, ST_MakeEnvelope({west}, {south}, {east}, {north}, 4326)::geography)")
             .OrderBy(a => a.FriendlyId)
             .ToListAsync();
-        return Results.Ok(assets.Select(AssetResponse.From));
+        var statuses = await AssetStatusLookup.For(db, [.. assets.Select(a => a.Id)]);
+        return Results.Ok(assets.Select(a => AssetResponse.From(a, statuses[a.Id])));
     }
 
     private static bool IsOnTheEarth(double longitude, double latitude) =>

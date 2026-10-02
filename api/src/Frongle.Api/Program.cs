@@ -170,6 +170,7 @@ app.MapGet("/api/me", (ClaimsPrincipal user) => new MeResponse(
 
 app.MapAreaEndpoints();
 app.MapAssetEndpoints();
+app.MapEventEndpoints();
 
 app.Run();
 

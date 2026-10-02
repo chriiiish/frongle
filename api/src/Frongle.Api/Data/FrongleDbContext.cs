@@ -37,6 +37,9 @@ public class FrongleDbContext : DbContext
     /// <summary>The Assets of the caller's tenant.</summary>
     public DbSet<Asset> Assets => Set<Asset>();
 
+    /// <summary>The Events in the history of the caller's tenant's Assets.</summary>
+    public DbSet<AssetEvent> Events => Set<AssetEvent>();
+
     /// <summary>Every recorded change, for the caller's tenant only.</summary>
     public DbSet<AuditRecord> AuditRecords => Set<AuditRecord>();
 
@@ -86,6 +89,20 @@ public class FrongleDbContext : DbContext
             asset.HasIndex(a => new { a.TenantId, a.FriendlyId }).IsUnique();
             asset.HasIndex(a => new { a.TenantId, a.AreaId, a.Type, a.Number }).IsUnique();
             asset.HasIndex(a => a.Location).HasMethod("gist");
+        });
+
+        modelBuilder.Entity<AssetEvent>(ev =>
+        {
+            ev.ToTable("events");
+            ev.Property(e => e.Id).HasColumnName("id");
+            ev.Property(e => e.AssetId).HasColumnName("asset_id");
+            ev.Property(e => e.Type).HasColumnName("type").HasConversion<string>();
+            ev.Property(e => e.Title).HasColumnName("title");
+            ev.Property(e => e.Notes).HasColumnName("notes");
+            ev.Property(e => e.OccurredAt).HasColumnName("occurred_at");
+            ev.Property(e => e.Version).IsRowVersion();
+            ev.HasOne<Asset>().WithMany().HasForeignKey(e => e.AssetId).OnDelete(DeleteBehavior.Restrict);
+            ev.HasIndex(e => new { e.AssetId, e.OccurredAt });
         });
 
         foreach (var entityType in modelBuilder.Model.GetEntityTypes().Where(t => typeof(ITenantOwned).IsAssignableFrom(t.ClrType)))
@@ -160,7 +177,7 @@ public class FrongleDbContext : DbContext
         var entityId = string.Join(',', entry.Metadata.FindPrimaryKey()!.Properties.Select(p => entry.Property(p.Name).CurrentValue));
 
         return entry.Properties
-            .Where(p => !p.Metadata.IsPrimaryKey() && p.Metadata.Name != nameof(ITenantOwned.TenantId))
+            .Where(p => !p.Metadata.IsPrimaryKey() && !p.Metadata.IsConcurrencyToken && p.Metadata.Name != nameof(ITenantOwned.TenantId))
             .Select(p => (p.Metadata.Name, Old: operation == AuditOperation.Created ? null : p.OriginalValue, New: operation == AuditOperation.Deleted ? null : p.CurrentValue))
             .Where(change => !Equals(change.Old, change.New))
             .Select(change => new AuditRecord
@@ -180,5 +197,10 @@ public class FrongleDbContext : DbContext
     /// <summary>Turns a field value into the text that an audit record stores.</summary>
     /// <param name="value">The value of a field, or null when the field had no value.</param>
     /// <returns>The value as culture-independent text, or null when there is no value.</returns>
-    private static string? AsText(object? value) => value is null ? null : Convert.ToString(value, CultureInfo.InvariantCulture);
+    private static string? AsText(object? value) => value switch
+    {
+        null => null,
+        DateTimeOffset moment => moment.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture),
+        _ => Convert.ToString(value, CultureInfo.InvariantCulture),
+    };
 }
