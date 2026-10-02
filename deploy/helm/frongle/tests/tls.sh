@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Checks that production serves HTTPS on its own domain and that local stays plain HTTP.
+# Checks that production serves HTTPS on its own domain.
 set -euo pipefail
 
 CHART="$(cd "$(dirname "$0")/.." && pwd)"
-PROD=(-f "$CHART/values-production.yaml" --set database.host=db.example --set ingress.tls.email=ops@example.com --set storage.bucket=images)
+PROD=(-f "$CHART/values-production.yaml" --set database.host=db.example --set ingress.tls.email=ops@example.com --set storage.bucket=example)
 
 fail() { echo "FAIL: $1" >&2; exit 1; }
 render() { helm template frongle "$CHART" "$@"; }
@@ -15,13 +15,6 @@ grep -q 'cert-manager.io/cluster-issuer: letsencrypt' <<<"$prod" || fail "produc
 grep -q 'kind: ClusterIssuer' <<<"$prod" || fail "production needs a ClusterIssuer"
 grep -q 'email: ops@example.com' <<<"$prod" || fail "the ClusterIssuer needs the ACME email"
 grep -q 'https://frongle.cjl.nz/auth' <<<"$prod" || fail "Keycloak needs the public HTTPS URL"
-
-local="$(render -f "$CHART/values-local.yaml")"
-! grep -q 'kind: ClusterIssuer' <<<"$local" || fail "local must not create a ClusterIssuer"
-! grep -q 'secretName: frongle-tls' <<<"$local" || fail "local must not use TLS"
-# The web dev server runs on port 5173, and Keycloak must let it sign in and call the token endpoint.
-grep -q 'http://localhost:5173/\*' <<<"$local" || fail "local Keycloak must accept the web dev server as a redirect URI"
-! grep -q 'localhost:5173' <<<"$prod" || fail "production must not accept the web dev server"
 
 ! render "${PROD[@]}" --set ingress.tls.email= >/dev/null 2>&1 || fail "an empty ACME email must be rejected"
 echo "ok"

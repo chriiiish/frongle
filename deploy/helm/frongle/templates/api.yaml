@@ -64,15 +64,6 @@ spec:
             - name: Storage__ServiceUrl
               value: {{ .Values.storage.serviceUrl | quote }}
             {{- end }}
-            {{- if .Values.minio.enabled }}
-            - name: Storage__AccessKey
-              value: {{ .Values.minio.accessKey | quote }}
-            - name: Storage__SecretKey
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Release.Name }}-minio
-                  key: secretKey
-            {{- end }}
           readinessProbe:
             httpGet:
               path: /health/ready

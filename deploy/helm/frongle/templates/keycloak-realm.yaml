@@ -36,14 +36,8 @@ spec:
         directAccessGrantsEnabled: false
         redirectUris:
           - {{ .Values.publicUrl }}/*
-          {{- range .Values.keycloak.devOrigins }}
-          - {{ . }}/*
-          {{- end }}
         webOrigins:
           - {{ .Values.publicUrl }}
-          {{- range .Values.keycloak.devOrigins }}
-          - {{ . }}
-          {{- end }}
         attributes:
           pkce.code.challenge.method: S256
         protocolMappers:
@@ -56,29 +50,3 @@ spec:
               jsonType.label: String
               access.token.claim: "true"
               id.token.claim: "true"
-    {{- with .Values.keycloak.users }}
-    users:
-      {{- range . }}
-      - username: {{ .username }}
-        enabled: true
-        email: {{ .email }}
-        firstName: {{ .firstName }}
-        lastName: {{ .lastName }}
-        emailVerified: true
-        attributes:
-          tenant_id:
-            - {{ .tenantId }}
-        credentials:
-          - type: password
-            value: {{ .password }}
-            temporary: false
-        realmRoles:
-          {{- toYaml .roles | nindent 10 }}
-        # An imported user does not get the realm's default roles. Without these two account roles, the token has no
-        # "account" audience, and the Keycloak account service answers 401 to the Profile page.
-        clientRoles:
-          account:
-            - view-profile
-            - manage-account
-      {{- end }}
-    {{- end }}

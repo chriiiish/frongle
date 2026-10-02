@@ -18,30 +18,18 @@ web:
   port: 8080
 
 database:
-  host: '' # Required when postgres.enabled is false (for example the RDS endpoint).
+  host: '' # Required (for example the RDS endpoint).
   port: 5432
   name: frongle
-  ssl: true # Use TLS to reach the database. Turn off for the in-cluster Postgres.
-  existingSecret: '' # Secret with the keys "username" and "password" of the database owner, who runs the migrations. Required when postgres.enabled is false.
-  appExistingSecret: '' # Secret with the keys "username" and "password" of a role that is not a superuser and has NOBYPASSRLS, which serves requests. Required when postgres.enabled is false.
-
-# In-cluster Postgres for local work. Prod uses RDS instead.
-postgres:
-  enabled: false
-  image: imresamu/postgis:17-3.5-bookworm
-  username: frongle
-  password: ''
-  appUsername: frongle_app
-  appPassword: ''
+  ssl: true # Use TLS to reach the database.
+  existingSecret: '' # Secret with the keys "username" and "password" of the database owner, who runs the migrations. Required.
+  appExistingSecret: '' # Secret with the keys "username" and "password" of a role that is not a superuser and has NOBYPASSRLS, which serves requests. Required.
 
 keycloak:
   instances: 2
   realm: frongle
   clientId: frongle-web
-  devOrigins: [] # Extra web addresses that may sign in, such as a dev server. Local work only.
   resources: {} # Kubernetes requests and limits for each Keycloak pod. Empty uses the operator defaults.
-  # Users are for local work only. Each has: username, password, email, tenantId, roles.
-  users: []
 
 ingress:
   className: nginx
@@ -57,13 +45,3 @@ storage:
   bucket: '' # Required.
   region: us-east-1
   serviceUrl: '' # Address of an S3-compatible server such as MinIO. Empty uses Amazon S3.
-
-# MinIO stands in for S3 in the local cluster. It sits behind the ingress at its own host name, because a
-# pre-signed link covers the host and the path, and a path prefix would change the path.
-minio:
-  enabled: false
-  image: cgr.dev/chainguard/minio:latest
-  storage: 1Gi # Size of the volume that holds the photos.
-  host: storage.localhost
-  accessKey: frongle
-  secretKey: '' # Required when minio.enabled is true.
