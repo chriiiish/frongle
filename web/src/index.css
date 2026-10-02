@@ -71,6 +71,10 @@ h6 {
 
 /* On a phone the Asset panel is a sheet at the bottom of the map. On a wider screen it sits at the right. */
 .asset-panel {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
   z-index: 1000;
   max-height: 60dvh;
   overflow-y: auto;

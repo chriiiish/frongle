@@ -9,6 +9,7 @@ import { MapPage } from './MapPage'
 const leaflet = vi.hoisted(() => {
   const state = {
     zoom: 15,
+    flownTo: undefined as { center: [number, number]; zoom: number } | undefined,
     handlers: {} as Record<string, (event?: unknown) => void>,
     // Leaflet gives every component the same map object, so the stand-in does too.
     map: {
@@ -19,6 +20,9 @@ const leaflet = vi.hoisted(() => {
         getNorth: () => -37.04,
       }),
       getZoom: () => state.zoom,
+      setView: (center: [number, number], zoom: number) => {
+        state.flownTo = { center, zoom }
+      },
     },
   }
   return state
@@ -134,6 +138,9 @@ const pole = {
   latitude: -37.045,
   longitude: 174.855,
   status: 'InService',
+  needsRetag: false,
+  formerFriendlyIds: [],
+  version: 5,
 }
 
 function stubApi(overrides: Record<string, unknown> = {}) {
@@ -164,6 +171,7 @@ async function renderMapPage(roles = auth.roles) {
 
 beforeEach(() => {
   leaflet.zoom = 15
+  leaflet.flownTo = undefined
   leaflet.handlers = {}
 })
 afterEach(() => vi.unstubAllGlobals())
@@ -514,6 +522,81 @@ it('names the area after the manager finishes drawing and shows it on the map wh
   expect(screen.getByRole('button', { name: 'Draw Area' })).toBeInTheDocument()
 })
 
+const moved = {
+  ...pole,
+  friendlyId: 'OT-LP-00001',
+  areaCode: 'OT',
+  needsRetag: true,
+  version: 6,
+  latitude: -37.0451,
+  longitude: 174.8651,
+}
+
+async function selectPole() {
+  await userEvent.click(await screen.findByTestId('asset'))
+  await screen.findByRole('heading', { name: 'MN-LP-00001' })
+}
+
+it('moves an asset to the place that the user clicks, after the user confirms', async () => {
+  const fetchMock = stubApi({ '/api/assets/asset-1/events': [] })
+  fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+    const path = url.split('?')[0]
+    const body =
+      init?.method === 'PUT'
+        ? moved
+        : path === '/api/areas'
+          ? [manukau]
+          : path === '/api/assets'
+            ? [pole]
+            : []
+    return { ok: true, status: 200, json: async () => body }
+  })
+  await renderMapPage()
+  await selectPole()
+
+  await userEvent.click(screen.getByRole('button', { name: 'Move' }))
+  expect(screen.getByText('Click the new place for MN-LP-00001.')).toBeInTheDocument()
+  await click(-37.0451, 174.8651)
+  expect(screen.queryByRole('dialog', { name: 'Add an Asset' })).not.toBeInTheDocument()
+  await userEvent.click(screen.getByRole('button', { name: 'Move Asset' }))
+
+  const marker = await screen.findByTestId('asset')
+  expect(marker).toHaveAttribute('data-center', '-37.0451,174.8651')
+  expect(await screen.findByRole('heading', { name: 'OT-LP-00001' })).toBeInTheDocument()
+})
+
+it('stops the move when the user cancels', async () => {
+  stubApi({ '/api/assets/asset-1/events': [] })
+  await renderMapPage()
+  await selectPole()
+  await userEvent.click(screen.getByRole('button', { name: 'Move' }))
+
+  await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+  await click(-37.0451, 174.8651)
+
+  expect(screen.queryByText('Click the new place for MN-LP-00001.')).not.toBeInTheDocument()
+  expect(screen.getByRole('dialog', { name: 'Add an Asset' })).toBeInTheDocument()
+})
+
+it('finds an asset by friendly id, shows it on the map, and opens its history', async () => {
+  const found = {
+    ...pole,
+    id: 'asset-7',
+    friendlyId: 'MN-SS-00007',
+    latitude: -37.041,
+    longitude: 174.851,
+  }
+  const fetchMock = stubApi({ '/api/assets/search': [found], '/api/assets/asset-7/events': [] })
+  await renderMapPage()
+
+  await userEvent.type(screen.getByRole('searchbox', { name: 'Find an Asset' }), 'SS-00007{Enter}')
+  await userEvent.click(await screen.findByRole('button', { name: /MN-SS-00007/ }))
+
+  expect(await screen.findByRole('heading', { name: 'MN-SS-00007' })).toBeInTheDocument()
+  expect(fetchMock).toHaveBeenCalledWith('/api/assets/asset-7/events', expect.anything())
+  expect(leaflet.flownTo).toEqual({ center: [-37.041, 174.851], zoom: 17 })
+})
+
 it('does not pass a click on an asset through to the map, so that it does not open the add dialog', async () => {
   stubApi()
   await renderMapPage()
@@ -617,4 +700,31 @@ it('keeps a new area on the map when the list request that began before it answe
   await act(async () => areaAnswers[0]([]))
 
   expect(screen.getByTestId('area')).toHaveTextContent('OT')
+})
+
+it('replaces the stale copy of an asset on the map with the fresher one that a search found', async () => {
+  const fresher = { ...pole, latitude: -37.046, longitude: 174.856, version: 9 }
+  stubApi({ '/api/assets/search': [fresher], '/api/assets/asset-1/events': [] })
+  await renderMapPage()
+  await screen.findByTestId('asset')
+
+  await userEvent.type(screen.getByRole('searchbox', { name: 'Find an Asset' }), 'LP{Enter}')
+  await userEvent.click(await screen.findByRole('button', { name: /MN-LP-00001/ }))
+
+  expect(screen.getAllByTestId('asset')).toHaveLength(1)
+  expect(screen.getByTestId('asset')).toHaveAttribute('data-center', '-37.046,174.856')
+})
+
+it('stops drawing an area when the manager starts to move an asset', async () => {
+  stubApi({ '/api/assets/asset-1/events': [] })
+  await renderMapPage(MANAGER)
+  await userEvent.click(await screen.findByTestId('asset'))
+  await screen.findByRole('heading', { name: 'MN-LP-00001' })
+  await userEvent.click(screen.getByRole('button', { name: 'Draw Area' }))
+
+  await userEvent.click(screen.getByRole('button', { name: 'Move' }))
+  await click(-37.0451, 174.8651)
+
+  expect(screen.queryAllByTestId('corner')).toHaveLength(0)
+  expect(screen.getByRole('dialog', { name: 'Move MN-LP-00001' })).toBeInTheDocument()
 })

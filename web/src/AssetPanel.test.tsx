@@ -22,6 +22,9 @@ const pole = {
   latitude: -37.045,
   longitude: 174.855,
   status: 'PendingInstallation' as const,
+  needsRetag: false,
+  formerFriendlyIds: [] as string[],
+  version: 3,
 }
 const installed = {
   id: 'event-1',
@@ -74,13 +77,18 @@ function stubApi(answers: Record<string, { ok: boolean; status?: number; body: u
   return fetchMock
 }
 
-function renderPanel(onChanged = vi.fn(), onClose = vi.fn()) {
+function renderPanel(
+  onChanged = vi.fn(),
+  onClose = vi.fn(),
+  asset: typeof pole = pole,
+  onMove = vi.fn(),
+) {
   render(
     <AuthContext.Provider value={auth}>
-      <AssetPanel asset={pole} onChanged={onChanged} onClose={onClose} />
+      <AssetPanel asset={asset} onChanged={onChanged} onClose={onClose} onMove={onMove} />
     </AuthContext.Provider>,
   )
-  return { onChanged, onClose }
+  return { onChanged, onClose, onMove }
 }
 
 afterEach(() => {
@@ -300,6 +308,103 @@ it('removes a photo from an event', async () => {
     '/api/assets/asset-1/events/event-1/images/image-1',
     expect.objectContaining({ method: 'DELETE' }),
   )
+})
+
+const retagged = {
+  ...pole,
+  friendlyId: 'OT-LP-00001',
+  areaCode: 'OT',
+  needsRetag: true,
+  formerFriendlyIds: ['MN-LP-00001'],
+}
+
+it('shows the friendly ids that the asset had before', async () => {
+  stubApi()
+
+  renderPanel(vi.fn(), vi.fn(), { ...retagged, needsRetag: false })
+
+  expect(screen.getByText('Was MN-LP-00001')).toBeInTheDocument()
+  await screen.findByText('Annual check')
+})
+
+it('asks someone to fit the new tag until they say it is fitted', async () => {
+  const fetchMock = stubApi({
+    'POST /api/assets/asset-1/retagged': { ok: true, body: { ...retagged, needsRetag: false } },
+  })
+  const { onChanged } = renderPanel(vi.fn(), vi.fn(), retagged)
+  await screen.findByText('Annual check')
+  expect(screen.getByRole('status')).toHaveTextContent('Fit the new tag OT-LP-00001')
+
+  await userEvent.click(screen.getByRole('button', { name: 'Tag fitted' }))
+
+  expect(fetchMock).toHaveBeenCalledWith(
+    '/api/assets/asset-1/retagged',
+    expect.objectContaining({ method: 'POST' }),
+  )
+  expect(onChanged).toHaveBeenCalledWith({ ...retagged, needsRetag: false })
+})
+
+it('does not ask for a new tag when none is needed', async () => {
+  stubApi()
+
+  renderPanel()
+
+  await screen.findByText('Annual check')
+  expect(screen.queryByRole('button', { name: 'Tag fitted' })).not.toBeInTheDocument()
+})
+
+it('lets the user start a move', async () => {
+  stubApi()
+  const { onMove } = renderPanel()
+  await screen.findByText('Annual check')
+
+  await userEvent.click(screen.getByRole('button', { name: 'Move' }))
+
+  expect(onMove).toHaveBeenCalled()
+})
+
+it('shows who changed what and when', async () => {
+  stubApi({
+    'GET /api/assets/asset-1/history': {
+      ok: true,
+      body: [
+        {
+          entityType: 'Asset',
+          entityId: 'asset-1',
+          operation: 'Updated',
+          field: 'FriendlyId',
+          oldValue: 'MN-LP-00001',
+          newValue: 'OT-LP-00001',
+          changedBy: 'user-2',
+          changedByName: 'Grace Hopper',
+          changedAt: '2026-10-02T03:00:00Z',
+        },
+        {
+          entityType: 'AssetEvent',
+          entityId: 'event-1',
+          operation: 'Created',
+          field: 'Title',
+          oldValue: null,
+          newValue: 'Installed new post',
+          changedBy: 'user-3',
+          changedByName: null,
+          changedAt: '2026-09-20T01:00:00Z',
+        },
+      ],
+    },
+  })
+  renderPanel()
+  await screen.findByText('Annual check')
+
+  await userEvent.click(screen.getByRole('button', { name: 'History' }))
+
+  const rows = await screen.findAllByRole('listitem')
+  expect(rows[0]).toHaveTextContent('Asset FriendlyId changed from MN-LP-00001 to OT-LP-00001')
+  expect(rows[0]).toHaveTextContent('Grace Hopper')
+  expect(rows[1]).toHaveTextContent('Event Title set to Installed new post')
+  expect(rows[1]).toHaveTextContent('user-3')
+  await userEvent.click(screen.getByRole('button', { name: 'Events' }))
+  expect(screen.getByText('Annual check')).toBeInTheDocument()
 })
 
 it('sends the newest version when the user saves again after the API refused a stale one', async () => {

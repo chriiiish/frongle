@@ -12,8 +12,10 @@ import {
 } from 'react-leaflet'
 import { type Area, type Asset, type AssetStatus, type Bounds } from './api'
 import { AssetPanel } from './AssetPanel'
+import { MoveAssetDialog } from './MoveAssetDialog'
 import { NewAreaDialog } from './NewAreaDialog'
 import { NewAssetDialog, type Place } from './NewAssetDialog'
+import { SearchBox } from './SearchBox'
 import { useAuth } from './auth/AuthContext'
 import { useApi } from './useApi'
 
@@ -22,6 +24,7 @@ const START_ZOOM = 12
 // Below this zoom a screen covers too much ground to list every Asset.
 const MIN_ASSET_ZOOM = 14
 const MOVE_DELAY_MS = 250
+const FIND_ZOOM = 17
 const TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
 const TILE_CREDIT =
   '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -78,6 +81,15 @@ function ClickWatcher({ onClick }: { onClick: (place: Place) => void }) {
   return null
 }
 
+/** Moves the map to a place when the target changes, and zooms in far enough to show the Assets. */
+function FlyTo({ target }: { target: { center: [number, number] } | undefined }) {
+  const map = useMap()
+  useEffect(() => {
+    if (target) map.setView(target.center, FIND_ZOOM)
+  }, [map, target])
+  return null
+}
+
 /** The API sends longitude first, as GeoJSON does, and Leaflet wants latitude first. */
 function toLatLngRings(area: Area): [number, number][][] {
   return area.boundary.coordinates.map((ring) => ring.map(([lng, lat]) => [lat, lng]))
@@ -96,6 +108,10 @@ export function MapPage() {
   // The corners that a manager has marked so far, or nothing when the manager is not drawing an Area.
   const [corners, setCorners] = useState<Place[]>()
   const [naming, setNaming] = useState(false)
+  // The Asset that the user is moving, and the place that the user clicked for it.
+  const [moving, setMoving] = useState<Asset>()
+  const [moveTo, setMoveTo] = useState<Place>()
+  const [flyTarget, setFlyTarget] = useState<{ center: [number, number] }>()
   const selected = assets.find((asset) => asset.id === selectedId)
   const [areasProblem, setAreasProblem] = useState<string>()
   const [assetsProblem, setAssetsProblem] = useState<string>()
@@ -142,22 +158,38 @@ export function MapPage() {
     }
   }, [api, view, zoomedIn])
 
+  function clickMap(place: Place) {
+    if (corners) setCorners([...corners, place])
+    else if (moving) setMoveTo(place)
+    else setAdding(place)
+  }
+
+  function showFound(asset: Asset) {
+    // The search answer is newer than the copy on the map, which may be from before another user changed the Asset.
+    setAssets((current) =>
+      current.some((a) => a.id === asset.id)
+        ? current.map((a) => (a.id === asset.id ? asset : a))
+        : [...current, asset],
+    )
+    setSelectedId(asset.id)
+    setFlyTarget({ center: [asset.latitude, asset.longitude] })
+  }
+
   return (
     <section className="container-fluid p-0 p-md-3 position-relative" aria-label="Map">
       <MapContainer
         className="map"
         center={AUCKLAND}
         zoom={START_ZOOM}
+        zoomControl={false}
         maxBounds={WORLD_BOUNDS}
         maxBoundsViscosity={1}
-        zoomControl={false}
       >
         <ZoomControl position="topright" />
         <TileLayer url={TILE_URL} attribution={TILE_CREDIT} />
         <ViewWatcher onChange={setView} />
-        <ClickWatcher
-          onClick={(place) => (corners ? setCorners([...corners, place]) : setAdding(place))}
-        />
+        <ClickWatcher onClick={clickMap} />
+        <FlyTo target={flyTarget} />
         {areas.map((area) => (
           <Polygon
             key={area.id}
@@ -210,47 +242,60 @@ export function MapPage() {
         data-testid="map-overlay"
         className="position-absolute top-0 start-0 end-0 p-2 p-md-3 pe-5 d-flex flex-column align-items-start gap-2 pe-none map-notice"
       >
-        {roles.includes(MANAGER_ROLE) && (
-          <>
-            {corners ? (
-              <div className="card card-body py-2 px-3 shadow-sm pe-auto">
-                <p className="mb-2">Click the map to mark each corner of the Area.</p>
-                <div className="d-flex gap-2">
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-outline-dark"
-                    disabled={corners.length === 0}
-                    onClick={() => setCorners(corners.slice(0, -1))}
-                  >
-                    Undo
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-outline-dark"
-                    onClick={() => setCorners(undefined)}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-primary"
-                    disabled={corners.length < MIN_CORNERS}
-                    onClick={() => setNaming(true)}
-                  >
-                    Finish
-                  </button>
-                </div>
+        <div className="pe-auto col-12 col-md-5 col-lg-4">
+          <SearchBox onPick={showFound} />
+        </div>
+        {moving ? (
+          <div className="card card-body py-2 px-3 shadow-sm pe-auto">
+            <p className="mb-2">Click the new place for {moving.friendlyId}.</p>
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-dark align-self-start"
+              onClick={() => setMoving(undefined)}
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          roles.includes(MANAGER_ROLE) &&
+          (corners ? (
+            <div className="card card-body py-2 px-3 shadow-sm pe-auto">
+              <p className="mb-2">Click the map to mark each corner of the Area.</p>
+              <div className="d-flex gap-2">
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-dark"
+                  disabled={corners.length === 0}
+                  onClick={() => setCorners(corners.slice(0, -1))}
+                >
+                  Undo
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-dark"
+                  onClick={() => setCorners(undefined)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-primary"
+                  disabled={corners.length < MIN_CORNERS}
+                  onClick={() => setNaming(true)}
+                >
+                  Finish
+                </button>
               </div>
-            ) : (
-              <button
-                type="button"
-                className="btn btn-primary shadow-sm pe-auto"
-                onClick={() => setCorners([])}
-              >
-                Draw Area
-              </button>
-            )}
-          </>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="btn btn-primary shadow-sm pe-auto"
+              onClick={() => setCorners([])}
+            >
+              Draw Area
+            </button>
+          ))
         )}
         {view && !zoomedIn && (
           <p className="alert alert-info py-1 px-3 mb-0 shadow-sm pe-auto" role="status">
@@ -283,6 +328,12 @@ export function MapPage() {
             setAssets((current) => current.map((a) => (a.id === changed.id ? changed : a)))
           }
           onClose={() => setSelectedId(undefined)}
+          onMove={() => {
+            // The map sends a click to the corners first, so a move cannot start while an Area is drawn.
+            setCorners(undefined)
+            setMoving(selected)
+            setSelectedId(undefined)
+          }}
         />
       )}
       {corners && naming && (
@@ -295,6 +346,19 @@ export function MapPage() {
             setNaming(false)
           }}
           onCancel={() => setNaming(false)}
+        />
+      )}
+      {moving && moveTo && (
+        <MoveAssetDialog
+          asset={moving}
+          location={moveTo}
+          onMoved={(moved) => {
+            setAssets((current) => current.map((a) => (a.id === moved.id ? moved : a)))
+            setSelectedId(moved.id)
+            setMoving(undefined)
+            setMoveTo(undefined)
+          }}
+          onCancel={() => setMoveTo(undefined)}
         />
       )}
       {adding && (
