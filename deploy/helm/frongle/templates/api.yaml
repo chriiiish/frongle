@@ -12,6 +12,7 @@ spec:
       labels:
         app: {{ .Release.Name }}-api
     spec:
+      serviceAccountName: {{ .Release.Name }}-api
       containers:
         - name: api
           image: "{{ .Values.api.image.repository }}:{{ .Values.api.image.tag }}"
@@ -21,15 +22,28 @@ spec:
             - name: DB_USER
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "frongle.dbSecret" . }}
+                  name: {{ include "frongle.dbAppSecret" . }}
                   key: username
             - name: DB_PASSWORD
               valueFrom:
                 secretKeyRef:
+                  name: {{ include "frongle.dbAppSecret" . }}
+                  key: password
+            - name: MIGRATIONS_DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "frongle.dbSecret" . }}
+                  key: username
+            - name: MIGRATIONS_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
                   name: {{ include "frongle.dbSecret" . }}
                   key: password
+            # Requests use the restricted app role, so row-level security applies. Only the migrations use the owner.
             - name: ConnectionStrings__Frongle
               value: "Host={{ include "frongle.dbHost" . }};Port={{ .Values.database.port }};Database={{ .Values.database.name }};Username=$(DB_USER);Password=$(DB_PASSWORD);SSL Mode={{ ternary "Require" "Disable" .Values.database.ssl }}"
+            - name: ConnectionStrings__Migrations
+              value: "Host={{ include "frongle.dbHost" . }};Port={{ .Values.database.port }};Database={{ .Values.database.name }};Username=$(MIGRATIONS_DB_USER);Password=$(MIGRATIONS_DB_PASSWORD);SSL Mode={{ ternary "Require" "Disable" .Values.database.ssl }}"
             - name: Database__MigrateOnStartup
               value: {{ .Values.api.migrateOnStartup | quote }}
             - name: Authentication__Authority
@@ -42,6 +56,23 @@ spec:
             # The Authority (the token issuer) still uses the public URL.
             - name: Authentication__RequireHttpsMetadata
               value: "false"
+            - name: Storage__Bucket
+              value: {{ required "storage.bucket is required" .Values.storage.bucket | quote }}
+            - name: Storage__Region
+              value: {{ .Values.storage.region | quote }}
+            {{- if .Values.storage.serviceUrl }}
+            - name: Storage__ServiceUrl
+              value: {{ .Values.storage.serviceUrl | quote }}
+            {{- end }}
+            {{- if .Values.minio.enabled }}
+            - name: Storage__AccessKey
+              value: {{ .Values.minio.accessKey | quote }}
+            - name: Storage__SecretKey
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-minio
+                  key: secretKey
+            {{- end }}
           readinessProbe:
             httpGet:
               path: /health/ready

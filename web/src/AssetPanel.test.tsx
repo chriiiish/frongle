@@ -299,3 +299,57 @@ it('removes a photo from an event', async () => {
     expect.objectContaining({ method: 'DELETE' }),
   )
 })
+
+it('sends the newest version when the user saves again after the API refused a stale one', async () => {
+  const newer = { ...checked, title: 'Checked by someone else', version: 13 }
+  let putCount = 0
+  const fetchMock = stubApi()
+  fetchMock.mockImplementation(async (url: string, init: RequestInit = {}) => {
+    const key = `${init.method ?? 'GET'} ${url}`
+    if (key === 'GET /api/assets/asset-1/events')
+      return { ok: true, status: 200, json: async () => events }
+    if (key === 'PUT /api/assets/asset-1/events/event-2') {
+      putCount += 1
+      return putCount === 1
+        ? {
+            ok: false,
+            status: 409,
+            json: async () => ({ title: 'Someone else changed this Event.' }),
+          }
+        : { ok: true, status: 200, json: async () => newer }
+    }
+    if (key === 'GET /api/assets/asset-1') return { ok: true, status: 200, json: async () => pole }
+    return { ok: false, status: 404, json: async () => ({}) }
+  })
+  renderPanel()
+  const first = (await screen.findAllByRole('listitem'))[0]
+  await userEvent.click(within(first).getByRole('button', { name: 'Edit' }))
+  await userEvent.type(screen.getByLabelText('Title'), '!')
+  events = [newer, installed]
+
+  await userEvent.click(screen.getByRole('button', { name: 'Save Event' }))
+  await screen.findByRole('alert')
+  expect(screen.getByLabelText('Title')).toHaveValue('Annual check!')
+  await userEvent.click(screen.getByRole('button', { name: 'Save Event' }))
+
+  const puts = fetchMock.mock.calls.filter(([, init]) => init?.method === 'PUT')
+  expect(JSON.parse(puts[1][1]!.body as string).version).toBe(13)
+})
+
+it('does not add the same event twice when only the refresh after the save fails', async () => {
+  const fetchMock = stubApi({
+    'POST /api/assets/asset-1/events': { ok: true, status: 201, body: checked },
+    'GET /api/assets/asset-1': { ok: false, status: 503, body: {} },
+  })
+  renderPanel()
+  await screen.findByText('Annual check')
+
+  await userEvent.click(screen.getByRole('button', { name: 'Add event' }))
+  await userEvent.type(screen.getByLabelText('Title'), 'Looked at it')
+  await userEvent.click(screen.getByRole('button', { name: 'Add Event' }))
+
+  expect(await screen.findByRole('button', { name: 'Add event' })).toBeInTheDocument()
+  expect(screen.queryByLabelText('Title')).not.toBeInTheDocument()
+  expect(await screen.findByRole('alert')).toHaveTextContent('503')
+  expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1)
+})

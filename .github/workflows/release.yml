@@ -43,6 +43,8 @@ jobs:
             echo "DATABASE_SECRET_ARN=$(terraform output -raw database_secret_arn)"
             echo "API_REPOSITORY=$(terraform output -json ecr_repository_urls | jq -r .api)"
             echo "WEB_REPOSITORY=$(terraform output -json ecr_repository_urls | jq -r .web)"
+            echo "IMAGES_BUCKET=$(terraform output -raw images_bucket)"
+            echo "API_ROLE_ARN=$(terraform output -raw api_role_arn)"
           } >> "$GITHUB_ENV"
 
       - uses: aws-actions/amazon-ecr-login@v2
@@ -120,6 +122,8 @@ jobs:
             --set api.image.repository="$API_REPOSITORY" --set api.image.tag="$GITHUB_SHA" \
             --set web.image.repository="$WEB_REPOSITORY" --set web.image.tag="$GITHUB_SHA" \
             --set database.host="$DATABASE_HOST" \
+            --set storage.bucket="$IMAGES_BUCKET" --set storage.region="$AWS_REGION" \
+            --set api.roleArn="$API_ROLE_ARN" \
             --set ingress.tls.email="${{ vars.ACME_EMAIL }}" \
             --wait --timeout 15m
 

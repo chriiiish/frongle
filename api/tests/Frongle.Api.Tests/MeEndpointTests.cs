@@ -16,6 +16,16 @@ public class MeEndpointTests(FrongleApiFactory factory) : IClassFixture<FrongleA
     }
 
     [Fact]
+    public async Task Get_me_with_an_empty_tenant_claim_is_forbidden()
+    {
+        var client = factory.CreateClientFor(tenantId: "", "maintenance-manager");
+
+        var response = await client.GetAsync("/api/me");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Get_me_without_a_tenant_claim_is_forbidden()
     {
         var client = factory.CreateClientFor(tenantId: null, "maintenance-manager");
