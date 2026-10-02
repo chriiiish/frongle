@@ -38,6 +38,7 @@ keycloak:
   instances: 2
   realm: frongle
   clientId: frongle-web
+  devOrigins: [] # Extra web addresses that may sign in, such as a dev server. Local work only.
   resources: {} # Kubernetes requests and limits for each Keycloak pod. Empty uses the operator defaults.
   # Users are for local work only. Each has: username, password, email, tenantId, roles.
   users: []

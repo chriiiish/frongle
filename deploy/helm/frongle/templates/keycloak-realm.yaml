@@ -36,8 +36,14 @@ spec:
         directAccessGrantsEnabled: false
         redirectUris:
           - {{ .Values.publicUrl }}/*
+          {{- range .Values.keycloak.devOrigins }}
+          - {{ . }}/*
+          {{- end }}
         webOrigins:
           - {{ .Values.publicUrl }}
+          {{- range .Values.keycloak.devOrigins }}
+          - {{ . }}
+          {{- end }}
         attributes:
           pkce.code.challenge.method: S256
         protocolMappers:

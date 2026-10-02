@@ -19,6 +19,9 @@ grep -q 'https://frongle.cjl.nz/auth' <<<"$prod" || fail "Keycloak needs the pub
 local="$(render -f "$CHART/values-local.yaml")"
 ! grep -q 'kind: ClusterIssuer' <<<"$local" || fail "local must not create a ClusterIssuer"
 ! grep -q 'secretName: frongle-tls' <<<"$local" || fail "local must not use TLS"
+# The web dev server runs on port 5173, and Keycloak must let it sign in and call the token endpoint.
+grep -q 'http://localhost:5173/\*' <<<"$local" || fail "local Keycloak must accept the web dev server as a redirect URI"
+! grep -q 'localhost:5173' <<<"$prod" || fail "production must not accept the web dev server"
 
 ! render "${PROD[@]}" --set ingress.tls.email= >/dev/null 2>&1 || fail "an empty ACME email must be rejected"
 echo "ok"
