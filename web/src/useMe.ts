@@ -13,16 +13,24 @@ export function useMe(token: string | undefined) {
   useEffect(() => {
     // Without a token the API can only answer 401, and that error would outlive the sign-in.
     if (!token) return
+    // A refreshed token starts a second request. The first must not overwrite it if it answers last.
+    let current = true
     async function load() {
       setError(undefined)
       const response = await fetch('/api/me', { headers: { Authorization: `Bearer ${token}` } })
       if (!response.ok) {
-        setError(`The API returned status ${response.status}.`)
+        if (current) setError(`The API returned status ${response.status}.`)
         return
       }
-      setMe(await response.json())
+      const found = await response.json()
+      if (current) setMe(found)
     }
-    load().catch((failure: Error) => setError(`The API could not be reached: ${failure.message}`))
+    load().catch(
+      (failure: Error) => current && setError(`The API could not be reached: ${failure.message}`),
+    )
+    return () => {
+      current = false
+    }
   }, [token])
 
   return { me, error }

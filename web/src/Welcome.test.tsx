@@ -85,3 +85,14 @@ it('shows why the API could not say who the user is', () => {
 
   expect(screen.getByRole('alert')).toHaveTextContent('The API returned status 403.')
 })
+
+it('tells a user who has neither Frongle role to ask for one, and offers no work they cannot do', () => {
+  renderWelcome(['some-other-realm-role'])
+
+  expect(screen.getByRole('heading', { name: 'Welcome, Morgan Manager' })).toBeInTheDocument()
+  expect(screen.getByRole('status')).toHaveTextContent(
+    'Your account has no Frongle role yet. Ask a Maintenance Manager to give you one.',
+  )
+  expect(screen.queryByRole('article')).not.toBeInTheDocument()
+  expect(screen.queryByText(/Open the map to get started/)).not.toBeInTheDocument()
+})
